@@ -1,4 +1,4 @@
-from models import DbScenarioRequest
+from src.engine.models import DbScenarioRequest
 def build_prompt(
     request: DbScenarioRequest,
     db_state: dict,
@@ -44,7 +44,10 @@ Return ONLY valid JSON matching this exact schema:
 
 REASONING RULES:
 - Base predictions on the ACTUAL configuration provided (not generic best practices)
-- Use historical incident data to estimate recovery times
+- Use historical incident data to estimate recovery times:
+  * PRIORITIZE specific incident times (e.g., "87 minutes on 2024-03-15") over general ranges
+  * If only ranges are given (e.g., "60-90 minutes"), use the upper bound or average depending on confidence
+  * Never estimate lower than observed historical times
 - Compare predicted recovery time against RTO/RPO policies
 - If confidence < 0.7, you MUST return an uncertainty response instead
 - Explain your reasoning clearly in the "why" array
