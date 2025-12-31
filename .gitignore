@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+.Python
+venv/
+.venv/
+*.egg-info/
+.DS_Store
+.env
+*.log
+.aws/
+credentials
+*.pem
+*.key
+
+# AI / IDE stuff
+.cursor/
+.claude/
+_bmad-core/
