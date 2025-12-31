@@ -1,16 +1,18 @@
 import boto3
 import json
+import os
 from src.engine.prompt_builder import build_prompt
 from src.engine.aws_state import FAKE_DATABASES, get_fake_db_state, get_real_db_state
 from src.engine.business_context import load_business_context
 from src.engine.models import DbScenarioRequest, DbImpactResponse
-
+IS_LAMBDA = os.getenv('AWS_EXECUTION_ENV') is not None
 def run_simulation(request: DbScenarioRequest) -> DbImpactResponse:
     # use fake database if it is in the fake databases list to avoid calling aws and incur costs
     if request.db_identifier in  FAKE_DATABASES:
         db_state = get_fake_db_state(request.db_identifier)
     else:
-        db_state = get_real_db_state(request.db_identifier, profile_name='develeap-ishay')
+        profile=None if IS_LAMBDA else 'develeap-ishay'
+        db_state = get_real_db_state(request.db_identifier, profile_name=profile)
     business_context = load_business_context()
     prompt = build_prompt(request, db_state, business_context)
     raw_response = call_bedrock(prompt)

@@ -13,7 +13,13 @@ credentials
 *.pem
 *.key
 
+# Lambda deployment artifacts
+build/
+lambda-package.zip
+*.zip
+
 # AI / IDE stuff
 .cursor/
 .claude/
+.bmad-core/
 _bmad-core/

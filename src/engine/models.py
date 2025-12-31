@@ -1,4 +1,3 @@
-from sre_parse import LITERAL
 from pydantic import BaseModel
 from typing import Literal
 class DbScenarioRequest(BaseModel):
