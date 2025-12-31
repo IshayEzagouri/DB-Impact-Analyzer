@@ -1,3 +1,4 @@
+import boto3
 FAKE_DATABASES = {
       "prod-orders-db-01": {
           "identifier": "prod-orders-db-01",
@@ -37,3 +38,25 @@ def get_fake_db_state(db_identifier: str) -> dict:
     if db_identifier not in FAKE_DATABASES:
         raise ValueError(f"Database {db_identifier} not found")
     return FAKE_DATABASES[db_identifier]
+
+def get_real_db_state(db_identifier: str, region: str='us-east-1', profile_name: str=None) -> dict:
+    if profile_name:
+        session = boto3.Session(profile_name=profile_name)
+        rds = session.client('rds', region_name=region)
+
+    else:
+        rds = boto3.client('rds', region_name=region)
+    response = rds.describe_db_instances(DBInstanceIdentifier=db_identifier)
+    db=response['DBInstances'][0]
+
+    return {
+        "identifier": db['DBInstanceIdentifier'],
+        'instance_class': db['DBInstanceClass'],
+        'engine': db['Engine'],
+        'multi_az': db['MultiAZ'],
+        'backup_retention_days': db['BackupRetentionPeriod'],
+        #pitr_enabled is automaticaly enabled if there is a backup retention period
+        "pitr_enabled": db['BackupRetentionPeriod'] > 0,
+
+    }
+

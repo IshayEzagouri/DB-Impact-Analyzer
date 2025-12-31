@@ -231,6 +231,53 @@ Now your local script uses live AWS truth.
 
 ---
 
+## 4.5 Usage / Testing (IMPORTANT - Cost Control)
+
+### Safe Database Names (Free Tier)
+
+**To avoid AWS costs, only use these database identifiers:**
+
+1. **`prod-orders-db-01`** (fake database)
+   - Risky config: No Multi-AZ, 1-day backups, no PITR
+   - Fast, free, works offline
+   - Use for testing high-risk scenarios
+
+2. **`prod-users-db`** (fake database)
+   - Safe config: Multi-AZ enabled, 7-day backups, PITR enabled
+   - Fast, free, works offline
+   - Use for testing low-risk scenarios
+
+3. **`test-db-phase2`** (real RDS instance)
+   - **Your only free-tier database**
+   - Uses real AWS boto3 calls
+   - Validates Phase 2 integration works
+
+### CLI Usage Examples
+
+```bash
+# Test with fake risky database (fast, free)
+python3 simulate_local.py --db prod-orders-db-01
+
+# Test with fake safe database (fast, free)
+python3 simulate_local.py --db prod-users-db
+
+# Test with real RDS database (proves boto3 works)
+python3 simulate_local.py --db test-db-phase2
+
+# Custom scenario
+python3 simulate_local.py --db prod-orders-db-01 --scenario az_failure
+```
+
+### ⚠️ Cost Warning
+
+**DO NOT** use other database names unless they exist in your AWS account. The system will attempt to call `describe_db_instances` which may:
+- Fail with an error if the database doesn't exist
+- Incur costs if you create additional RDS instances (only 1 free tier allowed)
+
+**Free tier limit**: 1 db.t4g.micro/db.t3.micro/db.t2.micro instance per month
+
+---
+
 ## 5. Phase 3 – Turn It Into Lambda + API Gateway
 
 **Goal:** Same brain, now behind an HTTP endpoint so you can show it off.

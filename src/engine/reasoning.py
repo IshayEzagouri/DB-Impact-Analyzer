@@ -1,12 +1,16 @@
 import boto3
 import json
 from src.engine.prompt_builder import build_prompt
-from src.engine.aws_state import get_fake_db_state
+from src.engine.aws_state import FAKE_DATABASES, get_fake_db_state, get_real_db_state
 from src.engine.business_context import load_business_context
 from src.engine.models import DbScenarioRequest, DbImpactResponse
 
 def run_simulation(request: DbScenarioRequest) -> DbImpactResponse:
-    db_state = get_fake_db_state(request.db_identifier)
+    # use fake database if it is in the fake databases list to avoid calling aws and incur costs
+    if request.db_identifier in  FAKE_DATABASES:
+        db_state = get_fake_db_state(request.db_identifier)
+    else:
+        db_state = get_real_db_state(request.db_identifier, profile_name='develeap-ishay')
     business_context = load_business_context()
     prompt = build_prompt(request, db_state, business_context)
     raw_response = call_bedrock(prompt)
