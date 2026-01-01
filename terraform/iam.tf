@@ -28,3 +28,23 @@ resource "aws_iam_role_policy_attachment" "bedrock_invoke"{
     role = aws_iam_role.lambda_role.name
     policy_arn = "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
 }
+
+
+resource "aws_iam_policy" "s3_read" {
+    name = "${var.function_name}-s3-read"
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+            {
+                Action = "s3:GetObject"
+                Effect = "Allow"
+                Resource = "arn:aws:s3:::${var.s3_bucket_name}/*"
+            }
+        ]
+    })
+}
+
+resource "aws_iam_role_policy_attachment" "s3_read_attachment" {
+    role = aws_iam_role.lambda_role.name
+    policy_arn = aws_iam_policy.s3_read.arn
+}

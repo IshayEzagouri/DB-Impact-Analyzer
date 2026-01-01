@@ -13,6 +13,11 @@
   }
 
   resource "aws_lambda_function" "db_impact_agent" {
+    environment {
+      variables = {
+        S3_BUCKET_NAME = var.s3_bucket_name
+      }
+    }
     filename = "${path.module}/../lambda-package.zip"
     function_name = var.function_name
     role = aws_iam_role.lambda_role.arn
@@ -53,4 +58,18 @@
     function_name = aws_lambda_function.db_impact_agent.function_name
     principal = "apigateway.amazonaws.com"
     source_arn = "${aws_apigatewayv2_api.lambda_api.execution_arn}/*/*" 
+  }
+
+  resource "aws_s3_bucket" "db_impact_agent_bucket" {
+    bucket = var.s3_bucket_name
+  
+}
+
+  resource "aws_s3_bucket_server_side_encryption_configuration" "db_impact_agent_bucket_encryption" {
+    bucket = aws_s3_bucket.db_impact_agent_bucket.id
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
   }

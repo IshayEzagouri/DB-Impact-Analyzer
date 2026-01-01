@@ -27,3 +27,9 @@ variable "region"{
     type        = number
     default     = 30
   }
+
+  variable "s3_bucket_name" {
+    description = "Name of the S3 bucket"
+    type        = string
+    default     = "db-impact-agent-business-context"
+  }

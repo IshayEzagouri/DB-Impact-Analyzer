@@ -12,3 +12,13 @@ output "lambda_function_arn" {
     description = "ARN of the Lambda function"
     value = aws_lambda_function.db_impact_agent.arn
 }
+
+output "s3_bucket_name" {
+    description = "Name of the S3 bucket"
+    value = aws_s3_bucket.db_impact_agent_bucket.id
+}
+
+output "s3_bucket_arn" {
+    description = "ARN of the S3 bucket"
+    value = aws_s3_bucket.db_impact_agent_bucket.arn
+}
