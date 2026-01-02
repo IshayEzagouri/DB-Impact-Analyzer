@@ -1,4 +1,6 @@
 import boto3
+from botocore.exceptions import ClientError
+from botocore.config import Config
 FAKE_DATABASES = {
       "prod-orders-db-01": {
           "identifier": "prod-orders-db-01",
@@ -40,15 +42,28 @@ def get_fake_db_state(db_identifier: str) -> dict:
     return FAKE_DATABASES[db_identifier]
 
 def get_real_db_state(db_identifier: str, region: str='us-east-1', profile_name: str=None) -> dict:
+    config = Config(
+        connect_timeout=5,
+        read_timeout=10   
+    )
     if profile_name:
         session = boto3.Session(profile_name=profile_name)
-        rds = session.client('rds', region_name=region)
+        rds = session.client('rds', region_name=region, config=config)
 
     else:
-        rds = boto3.client('rds', region_name=region)
-    response = rds.describe_db_instances(DBInstanceIdentifier=db_identifier)
-    db=response['DBInstances'][0]
-
+        rds = boto3.client('rds', region_name=region, config=config)
+        
+    try:
+        response = rds.describe_db_instances(DBInstanceIdentifier=db_identifier)
+        db=response['DBInstances'][0]
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'DBInstanceNotFound':
+            raise ValueError(f"Database {db_identifier} not found in AWS")
+        elif error_code == 'AccessDenied':
+            raise PermissionError(f"No permission to access database {db_identifier}")
+        else:
+            raise 
     return {
         "identifier": db['DBInstanceIdentifier'],
         'instance_class': db['DBInstanceClass'],

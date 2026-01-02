@@ -356,16 +356,221 @@ Now when someone edits SLA or RTO/RPO in S3, your answers change automatically.
 
 ---
 
-## 7. Hardening (Optional But Good)
+## 7. Phase 5 – Hardening (Production Readiness)
 
-- Validate Bedrock output strictly (schema)
-- Timeouts & error handling
-- Logging:
-  - Scenario
-  - DB id
-  - SLA/RTO/RPO flags
-  - Severity
-- Very basic CloudWatch dashboard (calls per day, error count)
+**Goal:** Make the system resilient to failures, easy to debug in production, and safe from bad inputs.
+
+**Current state:** Works perfectly in the happy path. Crashes or hangs when things go wrong.
+
+**Target state:** Handles failures gracefully, has visibility into what's happening, and fails fast with clear error messages.
+
+### What Is Hardening?
+
+Right now your system is like a car that only works on sunny days on smooth roads. Hardening is adding:
+- **Seatbelts** (error handling) - don't crash when something goes wrong
+- **Dashboard** (logging/monitoring) - see what's happening under the hood
+- **Speed limits** (timeouts) - don't wait forever for broken things
+- **Guardrails** (input validation) - reject garbage before it causes problems
+
+### Current State Analysis
+
+**✅ What You Already Have:**
+1. Pydantic validation - Models validate types automatically
+2. Generic exception handler in `lambda_handler.py:20-26`
+3. Basic logging - 3 log statements in lambda_handler
+4. JSON extraction - Handles Bedrock returning markdown in `reasoning.py:21-29`
+5. Fake DB fallback - Avoids AWS costs for test databases
+
+**❌ What's Missing (Phase 5 Will Fix):**
+1. No timeouts - RDS/S3/Bedrock calls can hang for 60+ seconds
+2. No AWS-specific error handling - "Database not found" crashes instead of returning clear error
+3. No retry logic - Transient S3/Bedrock errors = instant failure
+4. Minimal logging - Can't debug production issues
+5. No input validation - Empty db_identifier accepted, could inject weird characters
+6. No performance tracking - Don't know if Bedrock is slow or RDS is slow
+7. No custom metrics - Can't see error rates or severity distribution in CloudWatch
+
+### Phase 5 Breakdown
+
+#### 5.1 - Add Timeouts to All AWS Calls
+
+**Why:** Without timeouts, a stuck RDS call makes your Lambda hang for 60 seconds, then timeout, wasting money and making users wait.
+
+**Lambda timeout (30s in Terraform) vs Boto3 timeouts:**
+- **Lambda timeout:** Total execution time for entire function (emergency brake)
+- **Boto3 timeouts:** Individual service calls (speed limit for each step)
+- **Why both:** Boto3 timeouts help you fail fast (5s) with clear errors instead of hitting Lambda's 30s timeout
+
+**What to do:**
+```python
+from botocore.config import Config
+
+config = Config(
+    connect_timeout=5,  # 5 seconds to establish connection
+    read_timeout=10     # 10 seconds to read response
+)
+rds = boto3.client('rds', config=config)
+```
+
+**Files to modify:** `aws_state.py`, `business_context.py`, `reasoning.py`
+
+#### 5.2 - Handle AWS-Specific Errors Gracefully
+
+**Why:** When a database doesn't exist, boto3 raises `ClientError` with code `DBInstanceNotFound`. Users should get clear errors, not crashes.
+
+**What to do:**
+```python
+from botocore.exceptions import ClientError
+
+try:
+    response = rds.describe_db_instances(DBInstanceIdentifier=db_identifier)
+except ClientError as e:
+    error_code = e.response['Error']['Code']
+    if error_code == 'DBInstanceNotFound':
+        raise ValueError(f"Database '{db_identifier}' not found in AWS")
+    elif error_code == 'AccessDenied':
+        raise PermissionError(f"No permission to access database '{db_identifier}'")
+    else:
+        raise
+```
+
+**Files to modify:** `aws_state.py`, `business_context.py`, `reasoning.py`
+
+#### 5.3 - Add Retry Logic for Transient Failures
+
+**Why:** S3 and Bedrock sometimes return temporary errors. A simple retry often fixes it.
+
+**What to do:**
+```python
+config = Config(
+    retries={
+        'max_attempts': 3,
+        'mode': 'standard'  # Uses exponential backoff
+    }
+)
+```
+
+**Files to modify:** `business_context.py`, `reasoning.py`
+
+#### 5.4 - Add Structured Logging Throughout
+
+**Why:** When something breaks at 2am, you need to quickly see which database was queried, what the verdict was, how long each step took.
+
+**What to do:**
+```python
+logger.info(f"Starting simulation for db={request.db_identifier}, scenario={request.scenario}")
+logger.info(f"DB state fetch: {elapsed_ms:.0f}ms")
+logger.info(f"Bedrock inference: {elapsed_ms:.0f}ms")
+logger.info(f"Simulation complete - severity={response.business_severity}, sla_violation={response.sla_violation}")
+```
+
+**Files to modify:** `reasoning.py`, `lambda_handler.py`
+
+#### 5.5 - Add Input Validation
+
+**Why:** Users could send empty strings or malicious input. Fail fast with clear errors.
+
+**What to do:**
+```python
+from pydantic import BaseModel, field_validator
+import re
+
+class DbScenarioRequest(BaseModel):
+    db_identifier: str
+    scenario: str = "primary_db_failure"
+
+    @field_validator('db_identifier')
+    def validate_db_identifier(cls, v):
+        if not v or not v.strip():
+            raise ValueError("db_identifier cannot be empty")
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9-]{0,62}$', v):
+            raise ValueError("db_identifier must be valid AWS RDS identifier")
+        return v.strip()
+```
+
+**Files to modify:** `models.py`
+
+#### 5.6 - Add Explicit Bedrock Validation Error Handling
+
+**What to do:**
+```python
+from pydantic import ValidationError
+
+try:
+    parsed = DbImpactResponse.model_validate_json(cleaned_response)
+except ValidationError as e:
+    logger.error(f"Bedrock returned invalid schema: {e.errors()}")
+    logger.error(f"Raw Bedrock response: {raw_response[:500]}")
+    raise ValueError(f"AI model returned invalid response format")
+```
+
+**Files to modify:** `reasoning.py`
+
+#### 5.7 - Add Error Handling to simulate_local.py
+
+**What to do:**
+```python
+import sys
+
+try:
+    # ... existing code ...
+except ValueError as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Unexpected error: {e}", file=sys.stderr)
+    sys.exit(2)
+```
+
+**Files to modify:** `simulate_local.py`
+
+#### 5.8 - Add Performance Tracking
+
+**What to do:** Time each major step and log durations to identify bottlenecks.
+
+**Files to modify:** `reasoning.py`
+
+#### 5.9 - Add Custom CloudWatch Metrics (Optional)
+
+**What to do:** Publish custom metrics for severity distribution, violation rates, errors.
+
+**Files to modify:** `lambda_handler.py`
+
+### Implementation Priority
+
+**High Priority (Must Do):**
+1. 5.1 - Timeouts on AWS calls
+2. 5.2 - AWS-specific error handling
+3. 5.4 - Structured logging
+4. 5.5 - Input validation
+5. 5.7 - Error handling in simulate_local.py
+
+**Medium Priority (Should Do):**
+6. 5.3 - Retry logic
+7. 5.6 - Bedrock validation error handling
+8. 5.8 - Performance tracking
+
+**Low Priority (Nice to Have):**
+9. 5.9 - CloudWatch custom metrics
+
+### Phase 5 Done When:
+
+1. ✅ All boto3 clients have timeouts
+2. ✅ Database not found returns clear error (not crash)
+3. ✅ Logs show timing for each step
+4. ✅ Empty db_identifier is rejected with clear message
+5. ✅ simulate_local.py prints friendly errors
+6. ✅ Can see in CloudWatch logs exactly what happened in each request
+
+### Testing Your Hardening
+
+1. **Timeout test:** Temporarily set timeout to 1ms, verify it fails fast
+2. **Bad DB test:** `--db nonexistent-database-xyz` → should get clear error
+3. **Empty input test:** `--db ""` → should get validation error
+4. **S3 error test:** Remove S3 permissions temporarily → should get clear error
+5. **Performance test:** Check logs to see timing for each step
+
+⏱ **Rough: 3–4 sessions.**
 
 ---
 

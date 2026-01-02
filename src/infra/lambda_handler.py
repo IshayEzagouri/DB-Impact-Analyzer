@@ -5,7 +5,7 @@ from src.engine.reasoning import run_simulation
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 def handler(event, context):
-    logger.info(f"Recieved request for database simulation")
+    logger.info(f"Received request for database simulation")
     try:
         body = json.loads(event["body"])
         req = DbScenarioRequest(**body)
