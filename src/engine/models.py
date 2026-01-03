@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import Literal
+from src.engine.scenarios import validate_scenario
 import re
 
 class DbScenarioRequest(BaseModel):
@@ -18,9 +19,9 @@ class DbScenarioRequest(BaseModel):
 
     @field_validator('scenario')
     @classmethod
-    def validate_scenario(cls, v):
-        if not v or not v.strip():
-            raise ValueError("scenario cannot be empty")
+    def validate_scenario_exists(cls, v):
+        if not validate_scenario(v):
+            raise ValueError(f"Invalid scenario: {v}")
         return v.strip()
 
 class DbImpactResponse(BaseModel):
