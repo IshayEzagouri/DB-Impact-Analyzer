@@ -157,6 +157,15 @@ ANALYSIS REQUIRED:
    - Some industries require daily successful backups by regulation
 
 5. Assess urgency and severity:
+
+   If PITR enabled: Transaction logs still provide point-in-time recovery
+     - Backup failure is less critical (still has recent recovery points)
+     - Severity: HIGH (not CRITICAL) - has safety net
+
+   If PITR disabled: Backup failure is catastrophic
+     - Data loss = time since last successful backup
+     - Severity: CRITICAL - no safety net
+
    - CRITICAL if: Production database + No PITR + RPO policy strict (<1 hour)
    - HIGH if: Production database + PITR enabled (some protection remains)
    - MEDIUM if: Development/staging database + Recent backups exist
