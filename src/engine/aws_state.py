@@ -8,7 +8,10 @@ FAKE_DATABASES = {
           "backup_retention_days": 1,
           "pitr_enabled": False,
           "engine": "mysql",
-          "instance_class": "db.m5.large"
+          "instance_class": "db.m5.large",
+          "read_replicas": [],
+          "allocated_storage": 100,
+          "max_allocated_storage": 1000
       },
       "prod-users-db": {
           "identifier": "prod-users-db",
@@ -16,27 +19,36 @@ FAKE_DATABASES = {
           "backup_retention_days": 7,
           "pitr_enabled": True,
           "engine": "postgres",
-          "instance_class": "db.m5.xlarge"
-      }
+          "instance_class": "db.m5.xlarge",
+          "read_replicas": [],
+          "allocated_storage": 100,
+          "max_allocated_storage": 1000
+      },
+        "dev-analytics-db-03": {
+      "identifier": "dev-analytics-db-03",
+      "multi_az": False,
+      "backup_retention_days": 3,
+      "pitr_enabled": False,
+      "engine": "postgres",
+      "instance_class": "db.t3.medium",
+      "read_replicas": [],
+      "allocated_storage": 450,  # 90% of 500 = storage pressure scenario!
+      "max_allocated_storage": 500
+  },
+  "prod-payments-db": {
+      "identifier": "prod-payments-db",
+      "multi_az": True,
+      "backup_retention_days": 14,
+      "pitr_enabled": True,
+      "engine": "mysql",
+      "instance_class": "db.m5.large",
+      "read_replicas": ["prod-payments-db-replica-1", "prod-payments-db-replica-2"],  # For replica_lag testing
+      "allocated_storage": 200,
+      "max_allocated_storage": 2000
+  }
 }
 
 def get_fake_db_state(db_identifier: str) -> dict:
-    """
-    Returns fake RDS configuration for Phase 1 testing.
-    
-    In Phase 2, this will be replaced with real boto3 calls to AWS.
-    
-    Args:
-        db_identifier: RDS database identifier (e.g., "prod-orders-db-01")
-    
-    Returns:
-        dict: Database configuration with keys:
-            - identifier, multi_az, backup_retention_days, 
-              pitr_enabled, engine, instance_class
-    
-    Raises:
-        ValueError: If db_identifier is not in FAKE_DATABASES
-    """
     if db_identifier not in FAKE_DATABASES:
         raise ValueError(f"Database {db_identifier} not found")
     return FAKE_DATABASES[db_identifier]
@@ -72,6 +84,9 @@ def get_real_db_state(db_identifier: str, region: str='us-east-1', profile_name:
         'backup_retention_days': db['BackupRetentionPeriod'],
         #pitr_enabled is automaticaly enabled if there is a backup retention period
         "pitr_enabled": db['BackupRetentionPeriod'] > 0,
+        "read_replicas": db.get('ReadReplicaDBInstanceIdentifiers', []),
+        "allocated_storage": db['AllocatedStorage'],
+        "max_allocated_storage": db.get('MaxAllocatedStorage', db['AllocatedStorage']),
 
     }
 

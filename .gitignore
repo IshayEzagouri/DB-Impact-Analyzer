@@ -24,6 +24,12 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+
+# Documentation (generated/working files)
+docs/architecture.md
+docs/user-stories.md
 
 # AI / IDE stuff
 .cursor/
