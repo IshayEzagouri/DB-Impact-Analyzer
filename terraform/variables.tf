@@ -33,3 +33,25 @@ variable "region"{
     type        = string
     default     = "db-impact-agent-business-context"
   }
+
+  variable "api_key" {
+    description = "API key for the DB Impact Agent"
+    type        = string
+    sensitive   = true
+  }
+
+  variable "reserved_concurrent_executions" {
+    description = "Reserved concurrent executions for the Lambda function"
+    type        = number
+    default     = 2
+  }
+  variable "throttling_rate_limit" {
+    description = "Throttling rate limit for the API Gateway"
+    type        = number
+    default     = 5
+  }
+  variable "throttling_burst_limit" {
+    description = "Throttling burst limit for the API Gateway"
+    type        = number
+    default     = 10
+  }

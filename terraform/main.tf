@@ -16,6 +16,7 @@
     environment {
       variables = {
         S3_BUCKET_NAME = var.s3_bucket_name
+        API_KEY = var.api_key
       }
     }
     filename = "${path.module}/../lambda-package.zip"
@@ -26,6 +27,7 @@
     timeout = var.lambda_timeout
     #redeploys the lambda function if the zip hash changes
     source_code_hash = filebase64sha256("${path.module}/../lambda-package.zip")
+    reserved_concurrent_executions = var.reserved_concurrent_executions
   }
 
 
@@ -51,6 +53,11 @@
     api_id = aws_apigatewayv2_api.lambda_api.id
     name = "default"
     auto_deploy = true
+    default_route_settings {
+      throttling_rate_limit = var.throttling_rate_limit
+      throttling_burst_limit = var.throttling_burst_limit
+    }
+
   }
 
   resource "aws_lambda_permission" "api_gateway_permission" {
