@@ -17,7 +17,6 @@ def handler(event, context):
             "body": json.dumps({"error": "API key not set"})
         }
     if provided_api_key != expected_api_key:
-        logger.error(f"Unauthorized request with API key: {provided_api_key}")
         return {
             "statusCode": 401,
             "headers": {"Content-Type": "application/json"},

@@ -36,3 +36,5 @@ docs/user-stories.md
 .claude/
 .bmad-core/
 _bmad-core/
+
+secrets.toml
