@@ -28,24 +28,37 @@ def handler(event, context):
             "body": json.dumps({"error": "Unauthorized"})
         }
     try:
-        path=event.get("rawPath", "/")
-        if path == "/":
-            body = json.loads(event["body"])
+        path = event.get("rawPath", "/")
+        body_str = event.get("body", "{}")
+        body = json.loads(body_str)
+        
+        # Log the path for debugging
+        logger.info(f"Request path: {path}, body keys: {list(body.keys()) if isinstance(body, dict) else 'not a dict'}")
+        
+        # Check if this is a batch request by looking at the body (more reliable than path)
+        # Batch requests have 'db_identifiers' (plural), single requests have 'db_identifier' (singular)
+        is_batch_request = "db_identifiers" in body and isinstance(body.get("db_identifiers"), list)
+        
+        # Also check path as secondary indicator
+        is_batch_path = "/batch-analyze" in path or path.endswith("batch-analyze")
+        
+        if is_batch_request or is_batch_path:
+            req = BatchRequest(**body)
+            logger.info(f"Batch analysis for {len(req.db_identifiers)} databases, scenario={req.scenario}")
+            response = batch_analyze(req)
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": response.model_dump_json()
+            }
+        elif path == "/" or path == "/default" or "db_identifier" in body:
+            # Single analysis request
             req = DbScenarioRequest(**body)
             logger.info(f"Simulating failure for : {req.db_identifier}, scenario: {req.scenario}")
             
             response = get_cached_or_run_simulation(req)
             
             logger.info(f"Simulation complete - Severity: {response.business_severity}, SLA violation: {response.sla_violation}")
-            return {
-                "statusCode": 200,
-                "headers": {"Content-Type": "application/json"},
-                "body": response.model_dump_json()
-            }
-        elif path == "/batch-analyze":
-            body = json.loads(event.get("body", "{}"))
-            req = BatchRequest(**body)
-            response = batch_analyze(req)
             return {
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
