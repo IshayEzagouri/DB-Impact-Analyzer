@@ -49,6 +49,12 @@
     target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
   }
 
+  resource "aws_apigatewayv2_route" "batch_analyze" {
+    api_id = aws_apigatewayv2_api.lambda_api.id
+    route_key = "POST /batch-analyze"
+    target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+  }
+
   resource "aws_apigatewayv2_stage" "lambda_stage" {
     api_id = aws_apigatewayv2_api.lambda_api.id
     name = "default"

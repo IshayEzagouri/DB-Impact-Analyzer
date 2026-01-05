@@ -43,12 +43,26 @@ def handler(event, context):
                 "body": response.model_dump_json()
             }
         elif path == "/batch-analyze":
-            #todo
-            pass
+            body = json.loads(event.get("body", "{}"))
+            req = BatchRequest(**body)
+            response = batch_analyze(req)
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": response.model_dump_json()
+            }
         else:
-            # 404 handler
-            pass
-        
+            return {
+                "statusCode": 404,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": f"Unknown path: {path}"})
+            }
+    except ValueError as e:
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": str(e)})
+        }
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         return {

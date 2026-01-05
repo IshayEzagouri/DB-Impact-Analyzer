@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import streamlit_shadcn_ui as ui
 import warnings
+import pandas as pd
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # Suppress deprecation warning from streamlit-cookies-manager library
@@ -154,6 +155,39 @@ def call_api(db_identifier: str, scenario: str):
     except requests.RequestException as e:
         return {"error": f"Connection error: {str(e)}"}
 
+def call_batch_api(db_identifiers: list[str], scenario: str):
+    """Call batch analysis API endpoint"""
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY
+    }
+    payload = {
+        "db_identifiers": db_identifiers,
+        "scenario": scenario
+    }
+
+    try:
+        response = requests.post(
+            f"{API_URL}/batch-analyze",
+            json=payload,
+            headers=headers,
+            timeout=60  # Longer timeout for batch
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 400:
+            return {"error": f"Bad Request: {response.text}"}
+        elif response.status_code == 401:
+            return {"error": "Unauthorized - Invalid API key"}
+        else:
+            return {"error": f"API error: {response.status_code} - {response.text}"}
+
+    except requests.Timeout:
+        return {"error": "Request timeout - Batch analysis took too long to respond"}
+    except requests.RequestException as e:
+        return {"error": f"Connection error: {str(e)}"}
+
 # ============================================================================
 # MAIN APP
 # ============================================================================
@@ -175,37 +209,156 @@ def main():
     st.markdown("Analyze the business impact of database failures using AI-powered scenario planning.")
     st.markdown("---")
 
-    # Input form
-    with st.form("analysis_form"):
-        # Database selection dropdown with fake DBs + Custom option
-        db_options = ["prod-orders-db-01", "prod-users-db", "dev-analytics-db-03", "prod-payments-db", "Custom..."]
-        choice = st.selectbox("Database", db_options, help="Select a database or choose Custom to enter your own")
+    # Create tabs for single and batch analysis
+    tab1, tab2 = st.tabs(["🔍 Single Analysis", "📊 Batch Analysis"])
 
-        if choice == "Custom...":
-            db_identifier = st.text_input("Custom DB identifier", help="Enter your AWS RDS database identifier")
-        else:
-            db_identifier = choice
+    # ============================================================================
+    # TAB 1: Single Analysis
+    # ============================================================================
+    with tab1:
+        # Input form
+        with st.form("analysis_form"):
+            # Database selection dropdown with fake DBs + Custom option
+            db_options = ["prod-orders-db-01", "prod-users-db", "dev-analytics-db-03", "prod-payments-db", "Custom..."]
+            choice = st.selectbox("Database", db_options, help="Select a database or choose Custom to enter your own")
 
-        selected_scenario = st.selectbox(
-            "Failure Scenario",
-            options=list(SCENARIOS.keys()),
-            format_func=lambda x: SCENARIOS[x]
+            if choice == "Custom...":
+                db_identifier = st.text_input("Custom DB identifier", help="Enter your AWS RDS database identifier")
+            else:
+                db_identifier = choice
+
+            selected_scenario = st.selectbox(
+                "Failure Scenario",
+                options=list(SCENARIOS.keys()),
+                format_func=lambda x: SCENARIOS[x]
+            )
+
+            submitted = st.form_submit_button("🔍 Analyze Impact", type="primary")
+
+        # On form submit
+        if submitted:
+            if not db_identifier:
+                st.error("❌ Please enter a database identifier")
+            else:
+                with st.spinner("🤖 Analyzing database failure scenario..."):
+                    response = call_api(db_identifier, selected_scenario)
+
+                if "error" in response:
+                    st.error(f"❌ {response['error']}")
+                else:
+                    render_analysis_results(response)
+
+    # ============================================================================
+    # TAB 2: Batch Analysis
+    # ============================================================================
+    with tab2:
+        st.header("Batch Database Analysis")
+        st.markdown("Analyze multiple databases in parallel")
+
+        # Database options (same as single analysis)
+        db_options = ["prod-orders-db-01", "prod-users-db", "dev-analytics-db-03", "prod-payments-db"]
+        
+        db_identifiers = st.multiselect(
+            "Select Databases",
+            options=db_options,
+            default=["prod-orders-db-01", "prod-users-db"],
+            help="Select one or more databases to analyze (max 50)"
         )
 
-        submitted = st.form_submit_button("🔍 Analyze Impact", type="primary")
+        scenario_batch = st.selectbox(
+            "Failure Scenario",
+            options=list(SCENARIOS.keys()),
+            format_func=lambda x: SCENARIOS[x],
+            key="batch_scenario"
+        )
 
-    # On form submit
-    if submitted:
-        if not db_identifier:
-            st.error("❌ Please enter a database identifier")
-        else:
-            with st.spinner("🤖 Analyzing database failure scenario..."):
-                response = call_api(db_identifier, selected_scenario)
-
-            if "error" in response:
-                st.error(f"❌ {response['error']}")
+        if st.button("Batch Analyze", type="primary", key="batch_button"):
+            if len(db_identifiers) == 0:
+                st.error("Please enter at least one database identifier")
+            elif len(db_identifiers) > 50:
+                st.error(f"Too many databases ({len(db_identifiers)}). Maximum is 50.")
             else:
-                render_analysis_results(response)
+                with st.spinner(f"Analyzing {len(db_identifiers)} databases..."):
+                    result = call_batch_api(db_identifiers, scenario_batch)
+
+                if "error" in result:
+                    st.error(f"❌ {result['error']}")
+                else:
+                    # Display summary
+                    st.success(f"Batch analysis complete! Analyzed {result['total_count']} databases")
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("CRITICAL", result["critical_count"], delta=None, delta_color="off")
+                    with col2:
+                        st.metric("HIGH", result["high_count"])
+                    with col3:
+                        st.metric("MEDIUM", result["medium_count"])
+                    with col4:
+                        st.metric("LOW", result["low_count"])
+
+                    # Display results table
+                    rows = []
+                    for r in result["results"]:
+                        if r["status"] == "success":
+                            analysis = r["analysis"]
+                            rows.append({
+                                "Database": r["db_identifier"],
+                                "Severity": analysis["business_severity"],
+                                "SLA Violation": "YES" if analysis["sla_violation"] else "NO",
+                                "Outage (min)": analysis["expected_outage_time_minutes"],
+                                "Status": "✅"
+                            })
+                        else:
+                            rows.append({
+                                "Database": r["db_identifier"],
+                                "Severity": "ERROR",
+                                "SLA Violation": "-",
+                                "Outage (min)": "-",
+                                "Status": f"❌ {r['error']}"
+                            })
+
+                    df = pd.DataFrame(rows)
+
+                    # Color code by severity
+                    def highlight_severity(row):
+                        if row["Severity"] == "CRITICAL":
+                            return ['background-color: #ff4b4b'] * len(row)
+                        elif row["Severity"] == "HIGH":
+                            return ['background-color: #ffa500'] * len(row)
+                        elif row["Severity"] == "MEDIUM":
+                            return ['background-color: #ffff00'] * len(row)
+                        elif row["Severity"] == "LOW":
+                            return ['background-color: #90ee90'] * len(row)
+                        else:
+                            return [''] * len(row)
+
+                    st.markdown("---")
+                    st.subheader("📋 Results Table")
+                    st.dataframe(
+                        df.style.apply(highlight_severity, axis=1),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    # Expandable details for each database
+                    st.markdown("---")
+                    st.subheader("📖 Detailed Analysis")
+                    for r in result["results"]:
+                        with st.expander(f"{r['db_identifier']} - {r['analysis']['business_severity'] if r['status'] == 'success' else 'ERROR'}"):
+                            if r["status"] == "success":
+                                analysis = r["analysis"]
+                                render_severity_badge(analysis["business_severity"])
+                                render_metrics_row(analysis)
+                                st.markdown("**Analysis:**")
+                                for reason in analysis["why"]:
+                                    st.markdown(f"- {reason}")
+                                st.markdown("**Recommendations:**")
+                                for rec in analysis["recommendations"]:
+                                    st.markdown(f"- {rec}")
+                                st.metric("AI Confidence", f"{analysis['confidence']*100:.0f}%")
+                            else:
+                                st.error(f"Error: {r['error']}")
 
 if __name__ == "__main__":
     main()
