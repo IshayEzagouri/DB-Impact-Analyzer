@@ -29,20 +29,36 @@ def handler(event, context):
         }
     try:
         path = event.get("rawPath", "/")
+        request_context = event.get("requestContext", {})
+        route_key = request_context.get("routeKey", "UNKNOWN")
+        http_method = request_context.get("http", {}).get("method", "UNKNOWN")
+        
         body_str = event.get("body", "{}")
         body = json.loads(body_str)
         
-        # Log the path for debugging
-        logger.info(f"Request path: {path}, body keys: {list(body.keys()) if isinstance(body, dict) else 'not a dict'}")
+        # Log ALL path-related info for debugging
+        logger.info(f"=== PATH DEBUG INFO ===")
+        logger.info(f"rawPath: {path}")
+        logger.info(f"routeKey: {route_key}")
+        logger.info(f"httpMethod: {http_method}")
+        logger.info(f"requestContext: {json.dumps(request_context)}")
+        logger.info(f"Body keys: {list(body.keys()) if isinstance(body, dict) else 'not a dict'}")
+        logger.info(f"========================")
         
-        # Check if this is a batch request by looking at the body (more reliable than path)
-        # Batch requests have 'db_identifiers' (plural), single requests have 'db_identifier' (singular)
-        is_batch_request = "db_identifiers" in body and isinstance(body.get("db_identifiers"), list)
+        # Normalize path - remove stage prefix if present
+        normalized_path = path.replace("/default", "").rstrip("/") or "/"
+        logger.info(f"Normalized path: {normalized_path}")
         
-        # Also check path as secondary indicator
-        is_batch_path = "/batch-analyze" in path or path.endswith("batch-analyze")
+        # Detect batch request by body structure (most reliable)
+        # Batch requests have 'db_identifiers' (plural), single have 'db_identifier' (singular)
+        is_batch_by_body = "db_identifiers" in body and isinstance(body.get("db_identifiers"), list)
+        is_single_by_body = "db_identifier" in body and not is_batch_by_body
         
-        if is_batch_request or is_batch_path:
+        # Check for batch-analyze route (path-based OR body-based detection)
+        is_batch_path = "/batch-analyze" in normalized_path or normalized_path.endswith("batch-analyze") or path.endswith("/batch-analyze")
+        
+        if is_batch_path or is_batch_by_body:
+            # Batch analysis route
             req = BatchRequest(**body)
             logger.info(f"Batch analysis for {len(req.db_identifiers)} databases, scenario={req.scenario}")
             response = batch_analyze(req)
@@ -51,8 +67,8 @@ def handler(event, context):
                 "headers": {"Content-Type": "application/json"},
                 "body": response.model_dump_json()
             }
-        elif path == "/" or path == "/default" or "db_identifier" in body:
-            # Single analysis request
+        elif normalized_path == "/" or path == "/default" or path == "/default/" or path.endswith("/default") or is_single_by_body:
+            # Single analysis route
             req = DbScenarioRequest(**body)
             logger.info(f"Simulating failure for : {req.db_identifier}, scenario: {req.scenario}")
             
@@ -65,16 +81,41 @@ def handler(event, context):
                 "body": response.model_dump_json()
             }
         else:
+            # Unknown route - include debug info in response
+            debug_info = {
+                "error": f"Unknown path: {path}",
+                "debug": {
+                    "rawPath": path,
+                    "normalizedPath": normalized_path,
+                    "routeKey": route_key,
+                    "httpMethod": http_method,
+                    "bodyKeys": list(body.keys()) if isinstance(body, dict) else "not a dict"
+                }
+            }
+            logger.error(f"Unknown route - {json.dumps(debug_info)}")
             return {
                 "statusCode": 404,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": f"Unknown path: {path}"})
+                "body": json.dumps(debug_info)
             }
     except ValueError as e:
+        # Include path debug info in validation errors to help diagnose routing issues
+        path = event.get("rawPath", "/")
+        request_context = event.get("requestContext", {})
+        route_key = request_context.get("routeKey", "UNKNOWN")
+        error_response = {
+            "error": str(e),
+            "debug": {
+                "rawPath": path,
+                "routeKey": route_key,
+                "bodyKeys": list(json.loads(event.get("body", "{}")).keys()) if event.get("body") else "no body"
+            }
+        }
+        logger.error(f"Validation error - {json.dumps(error_response)}")
         return {
             "statusCode": 400,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": str(e)})
+            "body": json.dumps(error_response)
         }
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
