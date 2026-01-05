@@ -3,6 +3,20 @@ from typing import Literal
 from src.engine.scenarios import validate_scenario
 import re
 
+class DbConfig(BaseModel):
+    identifier: str
+    multi_az: bool
+    backup_retention_days: int
+    pitr_enabled: bool
+    engine: str
+    instance_class: str
+    read_replicas: list[str] = []
+    allocated_storage: int
+    max_allocated_storage: int
+    storage_encrypted: bool = False  # Optional, for what-if
+    engine_version: str | None = None  # Optional, for what-if
+    
+
 class DbScenarioRequest(BaseModel):
     db_identifier: str
     scenario: str = "primary_db_failure"
@@ -73,24 +87,14 @@ class WhatIfRequest(BaseModel):
     @classmethod
     def validate_config_overrides(cls, v):
         if not v:
-            raise ValueError("config_overrides cannot be empty. Provide at least one configuration change.")
-        
-        valid_fields = [
-            "multi_az",
-            "backup_retention_days",
-            "storage_encrypted",
-            "instance_class",
-            "allocated_storage",
-            "max_allocated_storage",
-            "read_replicas",
-            "auto_minor_version_upgrade"
-        ]
-        
-        # Check each key in config_overrides is valid
-        for key in v.keys():  # Iterate over keys in the dict, not valid_fields
+            raise ValueError("...")
+
+        valid_fields = list(DbConfig.model_fields.keys())
+
+        for key in v.keys():
             if key not in valid_fields:
                 raise ValueError(f"Invalid config field '{key}'. Valid fields: {', '.join(valid_fields)}")
-        return v  # Return outside the loop
+        return v
         
     @field_validator('scenario')
     @classmethod

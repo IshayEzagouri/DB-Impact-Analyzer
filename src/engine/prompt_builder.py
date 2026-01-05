@@ -1,4 +1,4 @@
-from src.engine.models import DbScenarioRequest
+from src.engine.models import DbScenarioRequest, DbConfig
 from src.engine.scenarios import get_scenario
 BASE_SYSTEM_PROMPT = """You are an expert Site Reliability Engineer analyzing database failure scenarios.
 
@@ -85,7 +85,7 @@ RDS_FEATURE_REFERENCE = """
   - Only recommend higher backup retention for compliance or audit requirements
   """
 
-def build_prompt( request: DbScenarioRequest, db_state: dict, business_context: str) -> str:
+def build_prompt( request: DbScenarioRequest, db_state: DbConfig, business_context: str) -> str:
     scenario_config = get_scenario(request.scenario)
     prompt = f"""
     {BASE_SYSTEM_PROMPT}
@@ -106,16 +106,16 @@ def build_prompt( request: DbScenarioRequest, db_state: dict, business_context: 
     """
     return prompt
 
-def format_db_config(db_state: dict) -> str:
+def format_db_config(db_state: DbConfig) -> str:
     """Format DB config for the prompt."""
     return f"""
-Database: {db_state['identifier']}
-Engine: {db_state['engine']}
-Instance Class: {db_state['instance_class']}
-Multi-AZ: {db_state['multi_az']}
-PITR Enabled: {db_state['pitr_enabled']}
-Backup Retention: {db_state['backup_retention_days']} days
-Read Replicas: {', '.join(db_state['read_replicas']) if db_state['read_replicas'] else 'None'}
-Allocated Storage: {db_state['allocated_storage']} GB
-Max Allocated Storage: {db_state['max_allocated_storage']} GB
+Database: {db_state.identifier}
+Engine: {db_state.engine}
+Instance Class: {db_state.instance_class}
+Multi-AZ: {db_state.multi_az}
+PITR Enabled: {db_state.pitr_enabled}
+Backup Retention: {db_state.backup_retention_days} days
+Read Replicas: {', '.join(db_state.read_replicas) if db_state.read_replicas else 'None'}
+Allocated Storage: {db_state.allocated_storage} GB
+Max Allocated Storage: {db_state.max_allocated_storage} GB
 """
