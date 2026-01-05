@@ -167,8 +167,10 @@ def call_batch_api(db_identifiers: list[str], scenario: str):
     }
 
     try:
+        # Remove trailing slash from API_URL if present, then append /batch-analyze
+        batch_url = f"{API_URL.rstrip('/')}/batch-analyze"
         response = requests.post(
-            f"{API_URL}/batch-analyze",
+            batch_url,
             json=payload,
             headers=headers,
             timeout=60  # Longer timeout for batch
