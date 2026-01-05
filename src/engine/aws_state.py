@@ -5,7 +5,7 @@ FAKE_DATABASES = {
       "prod-orders-db-01": {
           "identifier": "prod-orders-db-01",
           "multi_az": False,
-          "backup_retention_days": 1,
+          "backup_retention_days": 7,
           "pitr_enabled": False,
           "engine": "mysql",
           "instance_class": "db.m5.large",
