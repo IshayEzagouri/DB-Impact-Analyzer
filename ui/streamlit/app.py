@@ -1,6 +1,11 @@
 import streamlit as st
 import requests
-import streamlit_shadcn_ui as ui 
+import streamlit_shadcn_ui as ui
+import warnings
+from streamlit_cookies_manager import EncryptedCookieManager
+
+# Suppress deprecation warning from streamlit-cookies-manager library
+warnings.filterwarnings("ignore", message=".*st.cache.*", category=FutureWarning)
 
 # ============================================================================
 # CONFIGURATION
@@ -8,6 +13,8 @@ import streamlit_shadcn_ui as ui
 API_URL = st.secrets["api_url"]
 API_KEY = st.secrets["api_key"]
 UI_PASSWORD = st.secrets["ui_password"]
+
+# Cookie manager will be initialized in main() after page config
 
 SCENARIOS = {
     "primary_db_failure": "Primary Database Failure",
@@ -19,23 +26,37 @@ SCENARIOS = {
 # ============================================================================
 # PASSWORD PROTECTION
 # ============================================================================
-def check_password():
-    """Password protection for the app"""
+def check_password(cookies):
+    """Password protection with cookie persistence"""
+    # Wait for cookies to be ready (required by library)
+    if not cookies.ready():
+        st.stop()
+        return False
+
+    # Check if authenticated cookie exists (using 'in' operator as per docs)
+    if "authenticated" in cookies:
+        st.session_state["authenticated"] = True
+        return True
+
+    # Check session state (for within-session auth)
     if "authenticated" in st.session_state and st.session_state["authenticated"]:
         return True
+
+    # Not authenticated - show login form
     st.markdown("### 🔒 Authentication Required")
     st.markdown("Enter password to access the DB Failure Impact Assessment tool.")
     password = st.text_input("Password", type="password", key="password_input")
+
     if st.button("Login"):
-        st.session_state["authenticated"] = password == UI_PASSWORD
-        if st.session_state["authenticated"]:
+        if password == UI_PASSWORD:
+            st.session_state["authenticated"] = True
+            cookies["authenticated"] = "true"
+            cookies.save()
             st.rerun()
         else:
             st.error("Invalid password")
-    return False
 
-if not check_password():
-    st.stop()
+    return False
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -74,11 +95,15 @@ def render_metrics_row(response):
 def render_analysis_results(response):
     """Display full analysis results"""
     st.markdown("---")
-    st.subheader("📊 Impact Assessment Results")
-
-    # Severity badge
-    st.markdown("**Business Severity:**")
-    render_severity_badge(response["business_severity"])
+    
+    # Results header with severity
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("### 📊 Impact Assessment Results")
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("**Business Severity:**")
+        render_severity_badge(response["business_severity"])
 
     st.markdown("")  # Spacing
 
@@ -103,8 +128,8 @@ def render_analysis_results(response):
     with col1:
         st.metric("AI Confidence", f"{response['confidence']*100:.0f}%")
 
+@st.cache_data(ttl=600)  # Cache for 10 minutes
 def call_api(db_identifier: str, scenario: str):
-    """Call Lambda API with authentication"""
     headers = {
         "Content-Type": "application/json",
         "x-api-key": API_KEY
@@ -135,6 +160,16 @@ def call_api(db_identifier: str, scenario: str):
 
 def main():
     st.set_page_config(page_title="DB Failure Impact Assessment", layout="wide")
+    
+    # Initialize cookie manager after page config
+    cookies = EncryptedCookieManager(
+        prefix="db_impact_app_",
+        password=st.secrets.get("cookie_password", "default-cookie-secret-change-me")
+    )
+    
+    # Check password after page config and cookie initialization
+    if not check_password(cookies):
+        st.stop()
 
     st.title("🗄️ Database Failure Impact Assessment")
     st.markdown("Analyze the business impact of database failures using AI-powered scenario planning.")

@@ -33,24 +33,28 @@
 
 ## Read Replica Lag Incidents
 
-### 2024-05-18: prod-orders-db-01 Replica Lag Spike
+### 2024-05-18: prod-orders-db-01 Replica Lag Spike (HISTORICAL - Replicas Decommissioned)
 - **Cause:** Large batch insert on primary (50GB data load)
-- **Configuration:** 2 read replicas (db.m5.large), asynchronous replication
+- **Configuration at time of incident:** 2 read replicas (db.m5.large), asynchronous replication
+- **Current configuration:** NO read replicas (decommissioned in Q4 2024 due to cost optimization)
 - **Peak lag:** 12 minutes behind primary
 - **Resolution time:** 23 minutes (lag cleared after batch job completed)
 - **Business impact:** Analytics dashboard showed stale order counts, customer complaints
 - **Severity:** MEDIUM
 - **Mitigation:** Routed read traffic to primary temporarily
 - **Lessons learned:** Large writes cause predictable lag, need read replica monitoring
+- **Post-incident change:** Replicas removed; all reads now hit primary database directly
 
-### 2024-07-09: prod-users-db Replication Stall
+### 2024-07-09: prod-users-db Replication Stall (HISTORICAL - Replica Decommissioned)
 - **Cause:** Network congestion between AZs
-- **Configuration:** Single read replica (db.t3.medium)
+- **Configuration at time of incident:** Single read replica (db.t3.medium)
+- **Current configuration:** NO read replicas (decommissioned in Q4 2024, Multi-AZ handles availability)
 - **Peak lag:** 8 minutes behind primary
 - **Resolution time:** 15 minutes (AWS resolved network issue)
 - **Business impact:** User profile reads showed outdated data, minimal customer impact
 - **Severity:** LOW
 - **Lessons learned:** Multiple replicas provide redundancy during single replica issues
+- **Post-incident change:** Replica removed; Multi-AZ configuration provides sufficient availability
 
 ### 2024-09-30: prod-inventory-db Sustained Lag
 - **Cause:** Undersized replica instance (db.t3.small handling production read load)

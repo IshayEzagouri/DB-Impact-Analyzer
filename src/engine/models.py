@@ -33,3 +33,32 @@ class DbImpactResponse(BaseModel):
     why: list[str]
     recommendations: list[str]
     confidence: float
+
+class BatchRequest(BaseModel):
+    db_identifiers: list[str]
+    scenario: str = "primary_db_failure"
+
+    @field_validator('db_identifiers')
+    @classmethod
+    def validate_batch_size(cls, v):
+        if len(v) > 50:
+            raise ValueError(f"Batch size {len(v)} exceeds maximum of 50 databases. Split into multiple batches.")
+        if len(v) == 0:
+            raise ValueError("At least one database identifier required")
+        return v
+
+    @field_validator('scenario')
+    @classmethod
+    def validate_scenario(cls, v):
+        from src.engine.scenarios import SCENARIOS
+        if v not in SCENARIOS:
+            raise ValueError(f"Invalid scenario '{v}'")
+        return v
+
+class BatchResponse(BaseModel):
+    total_count: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    results: list[dict]  # [{db_identifier, status, analysis/error}]
