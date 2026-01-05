@@ -62,3 +62,50 @@ class BatchResponse(BaseModel):
     medium_count: int
     low_count: int
     results: list[dict]  # [{db_identifier, status, analysis/error}]
+    
+    
+class WhatIfRequest(BaseModel):
+    db_identifier: str
+    scenario: str="primary_db_failure"
+    config_overrides: dict
+    
+    @field_validator('config_overrides')
+    @classmethod
+    def validate_config_overrides(cls, v):
+        if not v:
+            raise ValueError("config_overrides cannot be empty. Provide at least one configuration change.")
+        
+        valid_fields = [
+            "multi_az",
+            "backup_retention_days",
+            "storage_encrypted",
+            "instance_class",
+            "allocated_storage",
+            "max_allocated_storage",
+            "read_replicas",
+            "auto_minor_version_upgrade"
+        ]
+        
+        # Check each key in config_overrides is valid
+        for key in v.keys():  # Iterate over keys in the dict, not valid_fields
+            if key not in valid_fields:
+                raise ValueError(f"Invalid config field '{key}'. Valid fields: {', '.join(valid_fields)}")
+        return v  # Return outside the loop
+        
+    @field_validator('scenario')
+    @classmethod
+    def validate_scenario(cls, v):
+        if not validate_scenario(v):
+            raise ValueError(f"Invalid scenario: {v}")
+        return v
+    @field_validator('db_identifier')
+    @classmethod
+    def validate_db_identifier(cls, v):
+        if not v or not v.strip():
+            raise ValueError("db_identifier cannot be empty")
+        return v.strip()
+    
+class WhatIfResponse(BaseModel):
+    baseline_analysis: DbImpactResponse
+    what_if_analysis: DbImpactResponse
+    improvement_summary: dict
