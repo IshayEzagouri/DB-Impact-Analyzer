@@ -54,47 +54,32 @@ def run_simulation(request: DbScenarioRequest, db_state: DbConfig | None = None,
 def call_bedrock(prompt: str) -> str:
     """Calls AWS Bedrock to get AI assessment."""
 
-    # ===== ORIGINAL CLAUDE/ANTHROPIC CODE (requires approval) =====
-    # body = json.dumps({
-    #     "anthropic_version": "bedrock-2023-05-31",
-    #     "max_tokens": 2000,
-    #     "messages": [
-    #         {
-    #             "role": "user",
-    #             "content": prompt
-    #         }
-    #     ]
-    # })
-    # bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
-    # response = bedrock.invoke_model(
-    #     modelId="anthropic.claude-3-5-sonnet-20240620-v1:0",
-    #     body=body
-    # )
-    # response_body = json.loads(response['body'].read())
-    # return response_body['content'][0]['text']
-    # ================================================================
-
-    # ===== LLAMA 3 IMPLEMENTATION (no approval needed) =====
+    # ===== CLAUDE/ANTHROPIC CODE =====
+    model_id = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    logger.info(f"Using Bedrock model: {model_id}")
+    
+    body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 2000,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    })
     config = Config(
         connect_timeout=5,
-        read_timeout=20   
+        read_timeout=30   
     )
     bedrock = boto3.client('bedrock-runtime', region_name='us-east-1', config=config)
-
-    # Llama 3 uses a different request format
-    body = json.dumps({
-        "prompt": prompt,
-        "max_gen_len": 2048,
-        "temperature": 0.1,  # Low temperature for consistent structured output
-        "top_p": 0.9
-    })
     try:
         response = bedrock.invoke_model(
-            modelId="meta.llama3-70b-instruct-v1:0",
+            modelId=model_id,
             body=body
         )
         response_body = json.loads(response['body'].read())
-        return response_body['generation']
+        return response_body['content'][0]['text']
     except ClientError as e:
         error_code = e.response['Error']['Code']
         if error_code == 'AccessDenied':
@@ -105,4 +90,37 @@ def call_bedrock(prompt: str) -> str:
             raise ValueError(f"Model not found or not accessible")
         else:
             raise
+    # ================================================================
+
+    # ===== LLAMA 3 IMPLEMENTATION (backup - commented out) =====
+    # config = Config(
+    #     connect_timeout=5,
+    #     read_timeout=20   
+    # )
+    # bedrock = boto3.client('bedrock-runtime', region_name='us-east-1', config=config)
+    #
+    # # Llama 3 uses a different request format
+    # body = json.dumps({
+    #     "prompt": prompt,
+    #     "max_gen_len": 2048,
+    #     "temperature": 0.1,  # Low temperature for consistent structured output
+    #     "top_p": 0.9
+    # })
+    # try:
+    #     response = bedrock.invoke_model(
+    #         modelId="meta.llama3-70b-instruct-v1:0",
+    #         body=body
+    #     )
+    #     response_body = json.loads(response['body'].read())
+    #     return response_body['generation']
+    # except ClientError as e:
+    #     error_code = e.response['Error']['Code']
+    #     if error_code == 'AccessDenied':
+    #         raise PermissionError(f"No permission to access bedrock")
+    #     elif error_code == 'ThrottlingException':
+    #         raise ValueError(f"Throttling exception from bedrock - too many requests")
+    #     elif error_code == 'ModelNotFoundException':
+    #         raise ValueError(f"Model not found or not accessible")
+    #     else:
+    #         raise
 
