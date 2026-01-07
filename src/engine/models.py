@@ -47,6 +47,7 @@ class DbImpactResponse(BaseModel):
     why: list[str]
     recommendations: list[str]
     confidence: float
+    db_config: DbConfig | None = None  # Database configuration that was analyzed
 
 class BatchRequest(BaseModel):
     db_identifiers: list[str]

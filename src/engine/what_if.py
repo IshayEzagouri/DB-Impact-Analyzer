@@ -18,7 +18,8 @@ def what_if_analysis(request: WhatIfRequest) -> WhatIfResponse:
         baseline_db_state = get_real_db_state(request.db_identifier, profile_name=profile)
         
     baseline_request = DbScenarioRequest(db_identifier=request.db_identifier, scenario=request.scenario)
-    baseline_analysis = run_simulation(baseline_request)
+    # Pass baseline_db_state to avoid duplicate fetching
+    baseline_analysis = run_simulation(baseline_request, db_state=baseline_db_state)
     
     what_if_db_state = baseline_db_state.model_copy(update=request.config_overrides)
     what_if_analysis = run_simulation(baseline_request, db_state=what_if_db_state, is_what_if=True, baseline_config=baseline_db_state)

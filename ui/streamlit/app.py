@@ -24,6 +24,8 @@ SCENARIOS = {
     "storage_pressure": "Storage Pressure"
 }
 
+SEVERITY_ORDER = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+
 # ============================================================================
 # PASSWORD PROTECTION
 # ============================================================================
@@ -63,8 +65,13 @@ def check_password(cookies):
 # HELPER FUNCTIONS
 # ============================================================================
 
-def render_severity_badge(severity: str):
-    """Display severity badge with color coding"""
+def render_severity_badge(severity: str, key_suffix: str = ""):
+    """Display severity badge with color coding
+    
+    Args:
+        severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW)
+        key_suffix: Unique suffix for the key to avoid duplicates (e.g., "baseline", "what_if", "db_identifier")
+    """
     variant_map = {
         "CRITICAL": "destructive",
         "HIGH": "destructive",
@@ -72,7 +79,10 @@ def render_severity_badge(severity: str):
         "LOW": "default"
     }
     variant = variant_map.get(severity, "default")
-    ui.badges(badge_list=[(severity, variant)], class_name="flex gap-2", key=f"badge_{severity}")
+    # Use key_suffix to ensure uniqueness - if not provided, use a timestamp-based fallback
+    import time
+    unique_key = f"badge_{severity}_{key_suffix}" if key_suffix else f"badge_{severity}_{int(time.time() * 1000000)}"
+    ui.badges(badge_list=[(severity, variant)], class_name="flex gap-2", key=unique_key)
 
 def render_metrics_row(response):
     """Display 4 key metrics in columns"""
@@ -93,9 +103,33 @@ def render_metrics_row(response):
     with col4:
         st.metric("Expected Outage", f"{response['expected_outage_time_minutes']} min")
 
+def render_db_config(config: dict):
+    """Display database configuration in an expandable section"""
+    if not config:
+        return
+    
+    with st.expander("🔧 Database Configuration (Analyzed)", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Multi-AZ", "✅ Enabled" if config.get("multi_az") else "❌ Disabled")
+            st.metric("PITR", "✅ Enabled" if config.get("pitr_enabled") else "❌ Disabled")
+            st.metric("Backup Retention", f"{config.get('backup_retention_days', 'N/A')} days")
+            st.metric("Allocated Storage", f"{config.get('allocated_storage', 'N/A')} GB")
+        with col2:
+            st.metric("Instance Class", config.get("instance_class", "N/A"))
+            st.metric("Max Allocated Storage", f"{config.get('max_allocated_storage', 'N/A')} GB")
+            st.metric("Engine", config.get("engine", "N/A"))
+            if config.get("engine_version"):
+                st.metric("Engine Version", config.get("engine_version", "N/A"))
+
 def render_analysis_results(response):
     """Display full analysis results"""
     st.markdown("---")
+    
+    # Show database configuration first
+    if "db_config" in response and response["db_config"]:
+        render_db_config(response["db_config"])
+        st.markdown("---")
     
     # Results header with severity
     col1, col2 = st.columns([3, 1])
@@ -104,7 +138,7 @@ def render_analysis_results(response):
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("**Business Severity:**")
-        render_severity_badge(response["business_severity"])
+        render_severity_badge(response["business_severity"], key_suffix="single_analysis")
 
     st.markdown("")  # Spacing
 
@@ -272,13 +306,67 @@ def render_what_if_results(response):
     
     st.markdown("---")
     
-    # Side-by-side comparison
+    # Side-by-side config comparison (MANDATORY - users need to see what changed)
+    st.markdown("#### ⚙️ Configuration Comparison")
+    config_col1, config_col2 = st.columns(2)
+    
+    baseline_config = baseline.get("db_config", {})
+    what_if_config = what_if.get("db_config", {})
+    
+    with config_col1:
+        st.markdown("**⬅️ Baseline Config**")
+        if baseline_config:
+            st.metric("Multi-AZ", "✅ Enabled" if baseline_config.get("multi_az") else "❌ Disabled")
+            st.metric("PITR", "✅ Enabled" if baseline_config.get("pitr_enabled") else "❌ Disabled")
+            st.metric("Backup Retention", f"{baseline_config.get('backup_retention_days', 'N/A')} days")
+            st.metric("Instance Class", baseline_config.get("instance_class", "N/A"))
+            st.metric("Allocated Storage", f"{baseline_config.get('allocated_storage', 'N/A')} GB")
+            st.metric("Max Allocated Storage", f"{baseline_config.get('max_allocated_storage', 'N/A')} GB")
+            st.metric("Severity", f"🔴 {baseline['business_severity']}")
+            st.metric("RTO", f"{baseline['expected_outage_time_minutes']} min")
+    
+    with config_col2:
+        st.markdown("**➡️ What-If Config**")
+        if what_if_config:
+            # Show delta for changed values
+            multi_az_changed = baseline_config.get("multi_az") != what_if_config.get("multi_az")
+            pitr_changed = baseline_config.get("pitr_enabled") != what_if_config.get("pitr_enabled")
+            retention_changed = baseline_config.get("backup_retention_days") != what_if_config.get("backup_retention_days")
+            instance_changed = baseline_config.get("instance_class") != what_if_config.get("instance_class")
+            allocated_storage_changed = baseline_config.get("allocated_storage") != what_if_config.get("allocated_storage")
+            max_allocated_storage_changed = baseline_config.get("max_allocated_storage") != what_if_config.get("max_allocated_storage")
+            
+            st.metric("Multi-AZ", "✅ Enabled" if what_if_config.get("multi_az") else "❌ Disabled", 
+                     delta="Changed" if multi_az_changed else None, delta_color="normal" if multi_az_changed else "off")
+            st.metric("PITR", "✅ Enabled" if what_if_config.get("pitr_enabled") else "❌ Disabled",
+                     delta="Changed" if pitr_changed else None, delta_color="normal" if pitr_changed else "off")
+            st.metric("Backup Retention", f"{what_if_config.get('backup_retention_days', 'N/A')} days",
+                     delta="Changed" if retention_changed else None, delta_color="normal" if retention_changed else "off")
+            st.metric("Instance Class", what_if_config.get("instance_class", "N/A"),
+                     delta="Changed" if instance_changed else None, delta_color="normal" if instance_changed else "off")
+            st.metric("Allocated Storage", f"{what_if_config.get('allocated_storage', 'N/A')} GB",
+                     delta="Changed" if allocated_storage_changed else None, delta_color="normal" if allocated_storage_changed else "off")
+            st.metric("Max Allocated Storage", f"{what_if_config.get('max_allocated_storage', 'N/A')} GB",
+                     delta="Changed" if max_allocated_storage_changed else None, delta_color="normal" if max_allocated_storage_changed else "off")
+            
+            severity_delta = None
+            if improvement.get("severity_improved"):
+                severity_delta = f"-{SEVERITY_ORDER[baseline['business_severity']] - SEVERITY_ORDER[what_if['business_severity']]} levels"
+            
+            st.metric("Severity", f"🟢 {what_if['business_severity']}", delta=severity_delta, delta_color="normal" if severity_delta else "off")
+            
+            rto_delta = f"-{baseline['expected_outage_time_minutes'] - what_if['expected_outage_time_minutes']} min"
+            st.metric("RTO", f"{what_if['expected_outage_time_minutes']} min", delta=rto_delta, delta_color="normal")
+    
+    st.markdown("---")
+    
+    # Side-by-side analysis comparison
     col1, col2 = st.columns(2)
     
     # Baseline Analysis
     with col1:
         st.markdown("#### 📊 Baseline Analysis (Current Config)")
-        render_severity_badge(baseline["business_severity"])
+        render_severity_badge(baseline["business_severity"], key_suffix="baseline")
         render_metrics_row(baseline)
         st.markdown("**Analysis:**")
         for reason in baseline["why"]:
@@ -291,7 +379,7 @@ def render_what_if_results(response):
     # What-If Analysis
     with col2:
         st.markdown("#### 🔮 What-If Analysis (Modified Config)")
-        render_severity_badge(what_if["business_severity"])
+        render_severity_badge(what_if["business_severity"], key_suffix="what_if")
         render_metrics_row(what_if)
         st.markdown("**Analysis:**")
         for reason in what_if["why"]:
@@ -461,7 +549,7 @@ def main():
                         with st.expander(f"{r['db_identifier']} - {r['analysis']['business_severity'] if r['status'] == 'success' else 'ERROR'}"):
                             if r["status"] == "success":
                                 analysis = r["analysis"]
-                                render_severity_badge(analysis["business_severity"])
+                                render_severity_badge(analysis["business_severity"], key_suffix=f"batch_{r['db_identifier']}")
                                 render_metrics_row(analysis)
                                 st.markdown("**Analysis:**")
                                 for reason in analysis["why"]:

@@ -46,6 +46,8 @@ def run_simulation(request: DbScenarioRequest, db_state: DbConfig | None = None,
         cleaned_response = cleaned_response[first_brace:last_brace + 1]
 
     parsed = DbImpactResponse.model_validate_json(cleaned_response)
+    # Include the db_config that was analyzed
+    parsed.db_config = db_state
     total_time = (time.time() - start_time) * 1000
     logger.info(f"Simulation complete in {total_time:.0f}ms - severity={parsed.business_severity}, sla_violation={parsed.sla_violation}")
     
