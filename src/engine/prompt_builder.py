@@ -41,6 +41,93 @@ OUTPUT_FORMAT_PROMPT = """
   - If confidence < 0.7, you MUST return an uncertainty response instead
   - Explain your reasoning clearly and quantitatively in the "why" array
 
+  ⚠️ CRITICAL BOOLEAN FLAG RULES (MANDATORY - NOT SUGGESTIONS) ⚠️
+
+  STEP 1: Extract thresholds from the BUSINESS POLICIES section provided above:
+  - Find the RTO threshold (maximum acceptable recovery time in minutes)
+  - Find the RPO threshold (maximum acceptable data loss in minutes)
+  - Find the SLA uptime/availability requirements
+
+  STEP 2: Calculate violations using simple comparison logic:
+
+  rto_violation:
+  - SIMPLE RULE: Recovery time FASTER than threshold = NO violation (false)
+  - SIMPLE RULE: Recovery time SLOWER than threshold = YES violation (true)
+
+  MATH:
+  - IF expected_outage_time_minutes > RTO_threshold THEN rto_violation = true
+  - IF expected_outage_time_minutes <= RTO_threshold THEN rto_violation = false
+
+  EXAMPLES (use your extracted RTO threshold, not hardcoded values):
+  - If recovery = X minutes and RTO threshold = Y minutes:
+    → If X <= Y: rto_violation = FALSE (recovery is FASTER or EQUAL to threshold = meets policy)
+    → If X > Y: rto_violation = TRUE (recovery is SLOWER than threshold = violates policy)
+  - Example: Recovery = X min, RTO = Y min, where X < Y → rto_violation = FALSE (meets policy)
+  - Example: Recovery = X min, RTO = Y min, where X = Y → rto_violation = FALSE (barely meets policy)
+  - Example: Recovery = X min, RTO = Y min, where X > Y → rto_violation = TRUE (violates policy)
+
+  CRITICAL: Lower recovery time = BETTER = NO violation
+  CRITICAL: If recovery time is LESS than the threshold, you are UNDER the limit = NO VIOLATION
+
+  rpo_violation:
+  - Compare: estimated_data_loss_minutes vs RPO threshold from policy
+  - IF estimated_data_loss_minutes > RPO_threshold THEN rpo_violation = true
+  - IF estimated_data_loss_minutes <= RPO_threshold THEN rpo_violation = false
+  - Example: If data loss = X minutes and RPO threshold = Y minutes:
+    → If X <= Y: rpo_violation = FALSE (data loss is WITHIN threshold = meets policy)
+    → If X > Y: rpo_violation = TRUE (data loss EXCEEDS threshold = violates policy)
+
+  sla_violation:
+  - IF rto_violation = true OR rpo_violation = true THEN sla_violation = true
+  - IF rto_violation = false AND rpo_violation = false THEN check if downtime affects SLA uptime %
+  - Use the SLA policies to determine if the outage duration violates availability commitments
+
+  STEP 3: MANDATORY VALIDATION (check your work before returning):
+
+  Check #1: RTO violation flag
+  - What is expected_outage_time_minutes? [YOUR NUMBER]
+  - What is RTO threshold from policy? [EXTRACT FROM BUSINESS POLICIES]
+  - Is [YOUR NUMBER] > [RTO THRESHOLD]?
+    → If YES: rto_violation MUST be true
+    → If NO: rto_violation MUST be false
+  - Example: Recovery = X min, RTO = Y min → Is X > Y? If NO, then rto_violation = false
+
+  Check #2: RPO violation flag
+  - What is estimated data loss in minutes? [YOUR NUMBER]
+  - What is RPO threshold from policy? [EXTRACT FROM BUSINESS POLICIES]
+  - Is [YOUR NUMBER] > [RPO THRESHOLD]?
+    → If YES: rpo_violation MUST be true
+    → If NO: rpo_violation MUST be false
+
+  Check #3: Consistency check - "why" text vs violation flags
+  - If your "why" says "meets policy" or "within bounds" or "under threshold" → violation flag MUST be false
+  - If your "why" says "exceeds" or "violates" or "breached" → violation flag MUST be true
+  - DO NOT write "policy breached" if the flag is false - that's a contradiction
+
+  Check #4: "Why" text wording validation (CRITICAL - prevents confusion)
+  
+  CORRECT wording when recovery is FASTER than threshold:
+  - "Recovery time of X minutes is UNDER the Y-minute RTO threshold (meets policy)"
+  - "X-minute recovery is within the Y-minute RTO policy"
+  - "Recovery completes in X minutes, which is Y-X minutes UNDER the RTO threshold"
+  
+  WRONG wording (DO NOT USE when recovery is faster):
+  - "RTO policy breached by Y-X minutes" ← This is backwards! You're UNDER, not OVER
+  - "X min recovery vs Y min threshold = breached" ← Wrong! X < Y means NOT breached
+  
+  CORRECT wording when recovery is SLOWER than threshold:
+  - "Recovery time of X minutes EXCEEDS the Y-minute RTO threshold by X-Y minutes"
+  - "X-minute recovery violates the Y-minute RTO policy"
+  - "RTO policy breached: recovery takes X minutes, exceeding threshold by X-Y minutes"
+  
+  KEY CONCEPT:
+  - "Breached by X minutes" means you EXCEEDED the threshold by X minutes (recovery > threshold)
+  - "Under by X minutes" means you are BELOW the threshold by X minutes (recovery < threshold)
+  - If recovery < threshold: Say "under" or "within" or "meets", NOT "breached"
+  - If recovery > threshold: Say "exceeds" or "breached" or "violates"
+
+  IF ANY CHECK FAILS: STOP, FIX THE FLAGS AND "WHY" TEXT, THEN RETURN JSON
+
   CONFIDENCE GUIDELINES:
   - High (0.8-1.0): Direct historical data for this exact scenario
   - Medium (0.6-0.79): Can extrapolate from similar scenarios
@@ -85,13 +172,67 @@ RDS_FEATURE_REFERENCE = """
   - Only recommend higher backup retention for compliance or audit requirements
   """
 
-def build_prompt( request: DbScenarioRequest, db_state: DbConfig, business_context: str) -> str:
+def build_prompt( request: DbScenarioRequest, db_state: DbConfig, business_context: str, is_what_if: bool = False, baseline_config: DbConfig = None) -> str:
     scenario_config = get_scenario(request.scenario)
-    prompt = f"""
-    {BASE_SYSTEM_PROMPT}
+    
+    what_if_section = ""
+    if is_what_if and baseline_config:
+        what_if_section = f"""
+    ⚠️ WHAT-IF ANALYSIS MODE ⚠️
+    
+    This is a WHAT-IF scenario analysis. The database configuration below has been MODIFIED from the baseline.
+    
+    BASELINE CONFIGURATION:
+    {format_db_config(baseline_config)}
+    
+    MODIFIED (WHAT-IF) CONFIGURATION:
+    {format_db_config(db_state)}
+    
+    🚨 MANDATORY WHAT-IF ANALYSIS RULES 🚨
+
+    STEP 1: Identify what changed between baseline and modified config:
+    - Multi-AZ: {baseline_config.multi_az} → {db_state.multi_az}
+    - PITR: {baseline_config.pitr_enabled} → {db_state.pitr_enabled}
+    - Backup Retention: {baseline_config.backup_retention_days} → {db_state.backup_retention_days} days
+
+    STEP 2: Apply correct recovery mechanism based on MODIFIED config:
+
+    IF Multi-AZ = True in modified config:
+      → Recovery mechanism = Automatic failover to standby (60-120 seconds)
+      → expected_outage_time_minutes MUST be 1-3 (NOT 87!)
+      → DO NOT cite historical snapshot restore times (those were for Multi-AZ = False)
+      → Historical 87 min is IRRELEVANT - different recovery mechanism
+
+    IF Multi-AZ = False in modified config:
+      → Recovery mechanism = Snapshot restore (60-90 minutes based on instance class)
+      → OK to use historical snapshot restore times
+
+    IF PITR = True in modified config:
+      → Data loss = seconds to minutes (transaction log replay)
+      → DO NOT cite historical 18-hour data loss (that was for PITR = False)
+
+    IF PITR = False in modified config:
+      → Data loss = hours (time since last daily snapshot)
+
+    STEP 3: VALIDATE your JSON before returning:
+    - If Multi-AZ = True AND you wrote expected_outage_time_minutes > 10 → ERROR, fix to 1-3
+    - If your "why" mentions both "failover <5 min" AND "87 minutes" → ERROR, contradiction
+    - Check: Does expected_outage_time_minutes match the recovery mechanism from MODIFIED config?
+    
+    """
+    
+    task_section = f"""
       TASK:
       Assess the impact if database "{request.db_identifier}" experiences a {request.scenario}.
-
+      """ if not is_what_if else f"""
+      TASK:
+      Assess the impact if database "{request.db_identifier}" experiences a {request.scenario} WITH THE MODIFIED CONFIGURATION SHOWN BELOW.
+      """
+    
+    prompt = f"""
+    {BASE_SYSTEM_PROMPT}
+    {what_if_section}
+    {task_section}
       You must answer these 5 critical questions:
       1. sla_violation: Will this failure breach our SLA commitments? (true/false)
       2. rto_violation: Will recovery time exceed our RTO policy? (true/false)
@@ -100,7 +241,7 @@ def build_prompt( request: DbScenarioRequest, db_state: DbConfig, business_conte
       5. business_severity: How critical is this? (LOW/MEDIUM/HIGH/CRITICAL)
     {RDS_FEATURE_REFERENCE} 
     {scenario_config['prompt_section']}
-    {format_db_config(db_state)}
+    {format_db_config(db_state) if not is_what_if else ""}
     {business_context}
     {OUTPUT_FORMAT_PROMPT}
     """

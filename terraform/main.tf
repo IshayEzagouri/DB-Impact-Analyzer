@@ -43,15 +43,23 @@
 
   }
 
-  resource "aws_apigatewayv2_route" "lambda_route" {
+  # Specific routes first (more specific = higher priority)
+  resource "aws_apigatewayv2_route" "what_if" {
     api_id = aws_apigatewayv2_api.lambda_api.id
-    route_key = "POST /"
+    route_key = "POST /what-if"
     target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
   }
 
   resource "aws_apigatewayv2_route" "batch_analyze" {
     api_id = aws_apigatewayv2_api.lambda_api.id
     route_key = "POST /batch-analyze"
+    target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+  }
+
+  # Catch-all route last
+  resource "aws_apigatewayv2_route" "lambda_route" {
+    api_id = aws_apigatewayv2_api.lambda_api.id
+    route_key = "POST /"
     target = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
   }
 
@@ -75,10 +83,7 @@
 
   resource "aws_s3_bucket" "db_impact_agent_bucket" {
     bucket = var.s3_bucket_name
-    lifecycle {
-    prevent_destroy = true
-    }
-  
+    force_destroy = true 
 }
 
   resource "aws_s3_bucket_server_side_encryption_configuration" "db_impact_agent_bucket_encryption" {

@@ -8,25 +8,28 @@ import os
 from src.engine.prompt_builder import build_prompt
 from src.engine.aws_state import FAKE_DATABASES, get_fake_db_state, get_real_db_state
 from src.engine.business_context import load_business_context
-from src.engine.models import DbScenarioRequest, DbImpactResponse
+from src.engine.models import DbScenarioRequest, DbImpactResponse, DbConfig
 
 logger = logging.getLogger(__name__)
 IS_LAMBDA = os.getenv('AWS_EXECUTION_ENV') is not None
-def run_simulation(request: DbScenarioRequest) -> DbImpactResponse:
+def run_simulation(request: DbScenarioRequest, db_state: DbConfig | None = None, is_what_if: bool = False, baseline_config: DbConfig | None = None) -> DbImpactResponse:
     start_time = time.time()
     logger.info(f"Starting simulation for db={request.db_identifier}, scenario={request.scenario}")
     # use fake database if it is in the fake databases list to avoid calling aws and incur costs
     db_start = time.time()
-    if request.db_identifier in  FAKE_DATABASES:
-        db_state = get_fake_db_state(request.db_identifier)
+    if db_state is None:
+        if request.db_identifier in  FAKE_DATABASES:
+            db_state = get_fake_db_state(request.db_identifier)
+        else:
+            profile=None if IS_LAMBDA else 'develeap-ishay'
+            db_state = get_real_db_state(request.db_identifier, profile_name=profile)
+        logger.info(f"DB state fetch: {(time.time() - db_start) * 1000:.0f}ms")
     else:
-        profile=None if IS_LAMBDA else 'develeap-ishay'
-        db_state = get_real_db_state(request.db_identifier, profile_name=profile)
-    logger.info(f"DB state fetch: {(time.time() - db_start) * 1000:.0f}ms")
+        logger.info(f"Using provided DB state (skipped fetch)")
     context_start = time.time()
     business_context = load_business_context()
     logger.info(f"Business context fetch: {(time.time() - context_start) * 1000:.0f}ms")
-    prompt = build_prompt(request, db_state, business_context)
+    prompt = build_prompt(request, db_state, business_context, is_what_if=is_what_if, baseline_config=baseline_config)
     bedrock_start = time.time()
     raw_response = call_bedrock(prompt)
     logger.info(f"Bedrock inference: {(time.time() - bedrock_start) * 1000:.0f}ms")
