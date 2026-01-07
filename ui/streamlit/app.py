@@ -307,56 +307,56 @@ def render_what_if_results(response):
     st.markdown("---")
     
     # Side-by-side config comparison (MANDATORY - users need to see what changed)
-    st.markdown("#### ⚙️ Configuration Comparison")
-    config_col1, config_col2 = st.columns(2)
-    
-    baseline_config = baseline.get("db_config", {})
-    what_if_config = what_if.get("db_config", {})
-    
-    with config_col1:
-        st.markdown("**⬅️ Baseline Config**")
-        if baseline_config:
-            st.metric("Multi-AZ", "✅ Enabled" if baseline_config.get("multi_az") else "❌ Disabled")
-            st.metric("PITR", "✅ Enabled" if baseline_config.get("pitr_enabled") else "❌ Disabled")
-            st.metric("Backup Retention", f"{baseline_config.get('backup_retention_days', 'N/A')} days")
-            st.metric("Instance Class", baseline_config.get("instance_class", "N/A"))
-            st.metric("Allocated Storage", f"{baseline_config.get('allocated_storage', 'N/A')} GB")
-            st.metric("Max Allocated Storage", f"{baseline_config.get('max_allocated_storage', 'N/A')} GB")
-            st.metric("Severity", f"🔴 {baseline['business_severity']}")
-            st.metric("RTO", f"{baseline['expected_outage_time_minutes']} min")
-    
-    with config_col2:
-        st.markdown("**➡️ What-If Config**")
-        if what_if_config:
-            # Show delta for changed values
-            multi_az_changed = baseline_config.get("multi_az") != what_if_config.get("multi_az")
-            pitr_changed = baseline_config.get("pitr_enabled") != what_if_config.get("pitr_enabled")
-            retention_changed = baseline_config.get("backup_retention_days") != what_if_config.get("backup_retention_days")
-            instance_changed = baseline_config.get("instance_class") != what_if_config.get("instance_class")
-            allocated_storage_changed = baseline_config.get("allocated_storage") != what_if_config.get("allocated_storage")
-            max_allocated_storage_changed = baseline_config.get("max_allocated_storage") != what_if_config.get("max_allocated_storage")
-            
-            st.metric("Multi-AZ", "✅ Enabled" if what_if_config.get("multi_az") else "❌ Disabled", 
-                     delta="Changed" if multi_az_changed else None, delta_color="normal" if multi_az_changed else "off")
-            st.metric("PITR", "✅ Enabled" if what_if_config.get("pitr_enabled") else "❌ Disabled",
-                     delta="Changed" if pitr_changed else None, delta_color="normal" if pitr_changed else "off")
-            st.metric("Backup Retention", f"{what_if_config.get('backup_retention_days', 'N/A')} days",
-                     delta="Changed" if retention_changed else None, delta_color="normal" if retention_changed else "off")
-            st.metric("Instance Class", what_if_config.get("instance_class", "N/A"),
-                     delta="Changed" if instance_changed else None, delta_color="normal" if instance_changed else "off")
-            st.metric("Allocated Storage", f"{what_if_config.get('allocated_storage', 'N/A')} GB",
-                     delta="Changed" if allocated_storage_changed else None, delta_color="normal" if allocated_storage_changed else "off")
-            st.metric("Max Allocated Storage", f"{what_if_config.get('max_allocated_storage', 'N/A')} GB",
-                     delta="Changed" if max_allocated_storage_changed else None, delta_color="normal" if max_allocated_storage_changed else "off")
-            
-            severity_delta = None
-            if improvement.get("severity_improved"):
-                severity_delta = f"-{SEVERITY_ORDER[baseline['business_severity']] - SEVERITY_ORDER[what_if['business_severity']]} levels"
-            
-            st.metric("Severity", f"🟢 {what_if['business_severity']}", delta=severity_delta, delta_color="normal" if severity_delta else "off")
-            
-            rto_delta = f"-{baseline['expected_outage_time_minutes'] - what_if['expected_outage_time_minutes']} min"
-            st.metric("RTO", f"{what_if['expected_outage_time_minutes']} min", delta=rto_delta, delta_color="normal")
+    with st.expander("⚙️ Configuration Comparison", expanded=True):
+        config_col1, config_col2 = st.columns(2)
+        
+        baseline_config = baseline.get("db_config", {})
+        what_if_config = what_if.get("db_config", {})
+        
+        with config_col1:
+            st.markdown("**⬅️ Baseline Config**")
+            if baseline_config:
+                st.metric("Multi-AZ", "✅ Enabled" if baseline_config.get("multi_az") else "❌ Disabled")
+                st.metric("PITR", "✅ Enabled" if baseline_config.get("pitr_enabled") else "❌ Disabled")
+                st.metric("Backup Retention", f"{baseline_config.get('backup_retention_days', 'N/A')} days")
+                st.metric("Instance Class", baseline_config.get("instance_class", "N/A"))
+                st.metric("Allocated Storage", f"{baseline_config.get('allocated_storage', 'N/A')} GB")
+                st.metric("Max Allocated Storage", f"{baseline_config.get('max_allocated_storage', 'N/A')} GB")
+                st.metric("Severity", f"🔴 {baseline['business_severity']}")
+                st.metric("RTO", f"{baseline['expected_outage_time_minutes']} min")
+        
+        with config_col2:
+            st.markdown("**➡️ What-If Config**")
+            if what_if_config:
+                # Show delta for changed values
+                multi_az_changed = baseline_config.get("multi_az") != what_if_config.get("multi_az")
+                pitr_changed = baseline_config.get("pitr_enabled") != what_if_config.get("pitr_enabled")
+                retention_changed = baseline_config.get("backup_retention_days") != what_if_config.get("backup_retention_days")
+                instance_changed = baseline_config.get("instance_class") != what_if_config.get("instance_class")
+                allocated_storage_changed = baseline_config.get("allocated_storage") != what_if_config.get("allocated_storage")
+                max_allocated_storage_changed = baseline_config.get("max_allocated_storage") != what_if_config.get("max_allocated_storage")
+                
+                st.metric("Multi-AZ", "✅ Enabled" if what_if_config.get("multi_az") else "❌ Disabled", 
+                         delta="Changed" if multi_az_changed else None, delta_color="normal" if multi_az_changed else "off")
+                st.metric("PITR", "✅ Enabled" if what_if_config.get("pitr_enabled") else "❌ Disabled",
+                         delta="Changed" if pitr_changed else None, delta_color="normal" if pitr_changed else "off")
+                st.metric("Backup Retention", f"{what_if_config.get('backup_retention_days', 'N/A')} days",
+                         delta="Changed" if retention_changed else None, delta_color="normal" if retention_changed else "off")
+                st.metric("Instance Class", what_if_config.get("instance_class", "N/A"),
+                         delta="Changed" if instance_changed else None, delta_color="normal" if instance_changed else "off")
+                st.metric("Allocated Storage", f"{what_if_config.get('allocated_storage', 'N/A')} GB",
+                         delta="Changed" if allocated_storage_changed else None, delta_color="normal" if allocated_storage_changed else "off")
+                st.metric("Max Allocated Storage", f"{what_if_config.get('max_allocated_storage', 'N/A')} GB",
+                         delta="Changed" if max_allocated_storage_changed else None, delta_color="normal" if max_allocated_storage_changed else "off")
+                
+                severity_delta = None
+                if improvement.get("severity_improved"):
+                    severity_delta = f"-{SEVERITY_ORDER[baseline['business_severity']] - SEVERITY_ORDER[what_if['business_severity']]} levels"
+                
+                st.metric("Severity", f"🟢 {what_if['business_severity']}", delta=severity_delta, delta_color="normal" if severity_delta else "off")
+                
+                rto_delta = f"-{baseline['expected_outage_time_minutes'] - what_if['expected_outage_time_minutes']} min"
+                st.metric("RTO", f"{what_if['expected_outage_time_minutes']} min", delta=rto_delta, delta_color="normal")
     
     st.markdown("---")
     
@@ -549,6 +549,12 @@ def main():
                         with st.expander(f"{r['db_identifier']} - {r['analysis']['business_severity'] if r['status'] == 'success' else 'ERROR'}"):
                             if r["status"] == "success":
                                 analysis = r["analysis"]
+                                
+                                # Show database configuration if available
+                                if "db_config" in analysis and analysis["db_config"]:
+                                    render_db_config(analysis["db_config"])
+                                    st.markdown("---")
+                                
                                 render_severity_badge(analysis["business_severity"], key_suffix=f"batch_{r['db_identifier']}")
                                 render_metrics_row(analysis)
                                 st.markdown("**Analysis:**")
