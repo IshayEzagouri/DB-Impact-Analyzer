@@ -128,6 +128,24 @@ OUTPUT_FORMAT_PROMPT = """
 
   IF ANY CHECK FAILS: STOP, FIX THE FLAGS AND "WHY" TEXT, THEN RETURN JSON
 
+  STEP 4: FINAL VALIDATION BEFORE RETURNING (MANDATORY):
+  
+  Before returning your JSON, perform this EXACT calculation:
+  
+  1. Write down: expected_outage_time_minutes = [YOUR NUMBER]
+  2. Write down: RTO threshold from policy = [EXTRACTED NUMBER]
+  3. Calculate: Is [YOUR NUMBER] > [RTO THRESHOLD]?
+     - If YES → rto_violation MUST be true
+     - If NO → rto_violation MUST be false
+  4. Double-check: Does your rto_violation flag match the calculation result?
+     - If NO → CORRECT the flag to match the math
+  5. Repeat for RPO with data_loss_minutes vs RPO threshold
+  
+  CRITICAL: If expected_outage_time_minutes = 3 and RTO threshold = 30:
+  - Calculation: Is 3 > 30? NO
+  - Therefore: rto_violation MUST be false
+  - If you wrote rto_violation = true, you made an error - FIX IT
+  
   CONFIDENCE GUIDELINES:
   - High (0.8-1.0): Direct historical data for this exact scenario
   - Medium (0.6-0.79): Can extrapolate from similar scenarios
