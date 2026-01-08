@@ -1,15 +1,19 @@
-# DB Failure Impact Agent
+# DB Impact Analyzer
 
-**Analyze database failure scenarios and assess their business impact on SLAs, RTOs, and RPOs.**
+**AIOps-oriented decision support tool that translates technical database failures into business impact assessments (SLA, RTO, RPO).**
 
 ## What It Does
 
-This agent uses AI (AWS Bedrock Claude 3.5 Sonnet) to analyze how database failures affect your business objectives:
+This tool uses AI (AWS Bedrock Claude 3.5 Sonnet) as a reasoning layer to synthesize infrastructure configuration, business policies, and historical incident data into structured business impact assessments:
 
 - **SLA Violations**: Will this failure breach uptime commitments?
 - **RTO Assessment**: Can we recover within acceptable time windows?
 - **RPO Assessment**: How much data might we lose?
 - **Severity Classification**: CRITICAL, HIGH, MEDIUM, or LOW business impact
+
+## AIOps-Oriented
+
+This tool focuses on judgment and prioritization, not monitoring or remediation. Traditional metrics tell you something broke; AIOps-style decision intelligence tells you what it means for your business. Given a database configuration and failure scenario, the analyzer synthesizes technical details with business context to produce actionable severity assessments and recommendations. It's a decision-support tool for incident triage and architectural planning, not an autonomous remediation system.
 
 ## Features
 
@@ -81,13 +85,13 @@ curl -X POST https://your-api.amazonaws.com/what-if \
 
 ### Database Identifiers
 
-By default, the agent uses **fake databases** for testing without AWS costs. Available fake databases:
+By default, the tool uses **fake databases** for testing without AWS costs. Available fake databases:
 - `prod-orders-db-01` - MySQL, no Multi-AZ, 7-day backups
 - `prod-users-db` - PostgreSQL, Multi-AZ enabled, PITR enabled
 - `dev-analytics-db-03` - PostgreSQL, storage pressure scenario
 - `prod-payments-db` - MySQL, Multi-AZ, with read replicas
 
-To analyze **real RDS databases**, provide the exact database identifier as it appears in the AWS RDS console. The identifier must match exactly (case-sensitive). The agent will query AWS RDS to fetch the database configuration automatically.
+To analyze **real RDS databases**, provide the exact database identifier as it appears in the AWS RDS console. The identifier must match exactly (case-sensitive). The analyzer will query AWS RDS to fetch the database configuration automatically.
 
 ### Response Format
 
@@ -110,7 +114,7 @@ To analyze **real RDS databases**, provide the exact database identifier as it a
 }
 ```
 
-## Available Scenarios
+## AI-Analyzed Failure Scenarios
 
 - `primary_db_failure`: Primary database instance failure
 - `replica_lag`: Read replica replication lag
