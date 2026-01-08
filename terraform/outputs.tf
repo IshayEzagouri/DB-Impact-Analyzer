@@ -23,3 +23,8 @@ output "s3_bucket_arn" {
     value = aws_s3_bucket.db_impact_agent_bucket.arn
 }
 
+output "dashboard_url" {
+    description = "URL to CloudWatch Dashboard"
+    value = "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${aws_cloudwatch_dashboard.db_impact_agent_dashboard.dashboard_name}"
+}
+

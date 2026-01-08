@@ -17,11 +17,13 @@ def emit_analysis_metric(
 ):
     """Emit CloudWatch metrics for a single analysis operation."""
     try:
-        # Send all 5 metrics in one API call
+        # Send all metrics in one API call
+        # Emit AnalysisCount 3 times with different dimension combinations
+        # This allows dashboard to query by Severity only, Scenario only, or both
         cloudwatch.put_metric_data(
             Namespace=NAMESPACE,
             MetricData=[
-                # Count analyses (filterable by Severity and Scenario)
+                # AnalysisCount with both dimensions (for detailed analysis)
                 {
                     'MetricName': 'AnalysisCount',
                     'Value': 1,
@@ -30,6 +32,31 @@ def emit_analysis_metric(
                         {'Name': 'Severity', 'Value': response.business_severity},
                         {'Name': 'Scenario', 'Value': scenario}
                     ]
+                },
+                # AnalysisCount with Severity only (for severity distribution widget)
+                {
+                    'MetricName': 'AnalysisCount',
+                    'Value': 1,
+                    'Unit': 'Count',
+                    'Dimensions': [
+                        {'Name': 'Severity', 'Value': response.business_severity}
+                    ]
+                },
+                # AnalysisCount with Scenario only (for scenario usage widget)
+                {
+                    'MetricName': 'AnalysisCount',
+                    'Value': 1,
+                    'Unit': 'Count',
+                    'Dimensions': [
+                        {'Name': 'Scenario', 'Value': scenario}
+                    ]
+                },
+                # AnalysisCount with NO dimensions (for total volume widget)
+                {
+                    'MetricName': 'AnalysisCount',
+                    'Value': 1,
+                    'Unit': 'Count'
+                    # No Dimensions = rollup across all severities/scenarios
                 },
                 # Track analysis duration (global, not per scenario)
                 {
