@@ -4,7 +4,7 @@
 
 ## What It Does
 
-This agent uses AI (AWS Bedrock Llama 3) to analyze how database failures affect your business objectives:
+This agent uses AI (AWS Bedrock Claude 3.5 Sonnet) to analyze how database failures affect your business objectives:
 
 - **SLA Violations**: Will this failure breach uptime commitments?
 - **RTO Assessment**: Can we recover within acceptable time windows?
@@ -151,7 +151,7 @@ terraform output dashboard_url
 ## Tech Stack
 
 - **Runtime**: AWS Lambda (Python 3.12)
-- **AI/LLM**: AWS Bedrock (Llama 3 70B)
+- **AI/LLM**: AWS Bedrock (Claude 3.5 Sonnet)
 - **API**: API Gateway v2
 - **Storage**: S3 (business policies), RDS (database state)
 - **Observability**: CloudWatch Custom Metrics & Dashboard

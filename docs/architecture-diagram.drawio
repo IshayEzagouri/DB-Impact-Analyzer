@@ -13,7 +13,7 @@
         <mxCell id="lambda" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontColor=#000000;fontStyle=1;fontSize=11;" value="Lambda Function" vertex="1">
           <mxGeometry height="60" width="200" x="400" y="240" as="geometry" />
         </mxCell>
-        <mxCell id="rds" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#000000;fontSize=10;" value="RDS Control Plane API" vertex="1">
+        <mxCell id="rds" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#000000;fontSize=10;" value="RDS API" vertex="1">
           <mxGeometry height="140" width="120" x="80" y="380" as="geometry" />
         </mxCell>
         <mxCell id="s3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;fontSize=10;" value="S3 Bucket" vertex="1">
