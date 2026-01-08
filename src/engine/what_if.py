@@ -3,14 +3,18 @@ from src.engine.reasoning import run_simulation, call_bedrock
 from src.engine.aws_state import get_real_db_state, get_fake_db_state, FAKE_DATABASES
 from src.engine.business_context import load_business_context
 from src.engine.prompt_builder import build_prompt
+from src.engine.cloudwatch_metric import emit_what_if_metric
 import logging
 import os
+import time
 
 logger = logging.getLogger(__name__)
 IS_LAMBDA = os.getenv('AWS_EXECUTION_ENV') is not None
 
 
 def what_if_analysis(request: WhatIfRequest) -> WhatIfResponse:
+    start_time = time.time()
+    logger.info(f"Starting what-if analysis for db={request.db_identifier}, scenario={request.scenario}")
     if request.db_identifier in FAKE_DATABASES:
         baseline_db_state = get_fake_db_state(request.db_identifier)
     else:
@@ -48,9 +52,15 @@ def what_if_analysis(request: WhatIfRequest) -> WhatIfResponse:
         "rpo_violation_prevented": rpo_violation_prevented
     }
     
-    # Step 6: Return WhatIfResponse
-    return WhatIfResponse(
+    # Step 6: Create WhatIfResponse
+    what_if_response = WhatIfResponse(
         baseline_analysis=baseline_analysis,
         what_if_analysis=what_if_analysis,
         improvement_summary=improvement_summary
     )
+    
+    total_time = (time.time() - start_time) * 1000
+    logger.info(f"What-if analysis complete in {total_time:.0f}ms - severity_change={severity_change}, severity_improved={severity_improved}")
+    emit_what_if_metric(what_if_response, total_time, request.scenario)
+    
+    return what_if_response

@@ -2,9 +2,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
 import logging
 import time
-
 from src.engine.models import DbScenarioRequest, BatchRequest, BatchResponse
 from src.engine.reasoning import run_simulation
+from src.engine.cloudwatch_metric import emit_batch_metric
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +46,14 @@ def batch_analyze(request: BatchRequest) -> BatchResponse:
         )
         total_time=(time.time() - start_time) * 1000
         logger.info(f"Batch analysis complete: {len(results)} databases in {total_time:.0f}ms")
-    return BatchResponse(
+        
+    batch_response = BatchResponse(
         total_count=len(results),
         critical_count=severity_counts["CRITICAL"],
         high_count=severity_counts["HIGH"],
         medium_count=severity_counts["MEDIUM"],
         low_count=severity_counts["LOW"],
         results=results
-    )   
+    )
+    emit_batch_metric(batch_response, total_time)
+    return batch_response

@@ -48,3 +48,24 @@ resource "aws_iam_role_policy_attachment" "s3_read_attachment" {
     role = aws_iam_role.lambda_role.name
     policy_arn = aws_iam_policy.s3_read.arn
 }
+
+resource "aws_iam_policy" "cloudwatch_metrics" {
+    name = "${var.function_name}-cloudwatch-metrics"
+    policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+            {
+                Action = [
+                    "cloudwatch:PutMetricData"
+                ]
+                Effect = "Allow"
+                Resource = "*"
+            }
+        ]
+    })
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_metrics_attachment" {
+    role = aws_iam_role.lambda_role.name
+    policy_arn = aws_iam_policy.cloudwatch_metrics.arn
+}

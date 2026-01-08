@@ -1,14 +1,13 @@
 import json
 import logging
 import os
-import time
 from src.engine.models import DbScenarioRequest, BatchRequest, WhatIfRequest
-from src.engine.reasoning import run_simulation
+from src.engine.single_analyzer import analyze
 from src.engine.batch_analyzer import batch_analyze
 from src.engine.what_if import what_if_analysis
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-CACHE={}
 
 
 def handler(event, context):
@@ -89,11 +88,11 @@ def handler(event, context):
         elif normalized_path == "/" or is_single_by_body:
             # Single analysis route
             req = DbScenarioRequest(**body)
-            logger.info(f"Simulating failure for : {req.db_identifier}, scenario: {req.scenario}")
+            logger.info(f"Single analysis for db={req.db_identifier}, scenario={req.scenario}")
             
-            response = get_cached_or_run_simulation(req)
+            response = analyze(req)
             
-            logger.info(f"Simulation complete - Severity: {response.business_severity}, SLA violation: {response.sla_violation}")
+            logger.info(f"Analysis complete - Severity: {response.business_severity}, SLA violation: {response.sla_violation}")
             return {
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
@@ -143,30 +142,3 @@ def handler(event, context):
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": str(e)})
         }
-        
-def get_cached_or_run_simulation(req: DbScenarioRequest):
-    """
-    Check cache for existing result, or run simulation and cache it.
-    Returns DbImpactResponse.
-    """
-    # Create cache key from db_identifier and scenario
-    cache_key = f"{req.db_identifier}#{req.scenario}"
-    
-    # Check if we have a cached result
-    if cache_key in CACHE:
-        cache_entry = CACHE[cache_key]
-        # Check if cache is still valid (less than 600 seconds / 10 minutes old)
-        if time.time() - cache_entry['ts'] < 600:
-            logger.info(f"Cache HIT for {cache_key}")
-            return cache_entry['response']
-        else:
-            # Cache expired, remove it
-            logger.info(f"Cache EXPIRED for {cache_key}")
-            del CACHE[cache_key]
-    
-    # No cache entry or expired, run simulation
-    logger.info(f"Cache MISS for {cache_key}")
-    response = run_simulation(req)
-    # Store result in cache
-    CACHE[cache_key] = {'response': response, 'ts': time.time()}
-    return response
