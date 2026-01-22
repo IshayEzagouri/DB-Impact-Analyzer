@@ -23,6 +23,23 @@ This tool focuses on judgment and prioritization, not monitoring or remediation.
 - **What-If Simulation**: Test hypothetical configurations (e.g., "What if we enable Multi-AZ?")
 - **CloudWatch Dashboard**: Monitor usage patterns and performance metrics
 
+## Screenshots
+
+### What-If Analysis: Test Config Changes Before Deployment
+Simulate the business impact of proposed configuration changes. See how enabling Multi-AZ transforms a CRITICAL severity issue into MEDIUM, preventing SLA/RTO/RPO violations.
+
+![What-If Analysis](src/screenshots/what-if-response.png)
+
+### Single Analysis: Instant Business Impact Assessment
+Analyze individual databases to get immediate severity classification, SLA/RTO/RPO violation status, and actionable recommendations.
+
+![Single Analysis](src/screenshots/single-response.png)
+
+### Batch Analysis: Fleet-Wide Risk Assessment
+Analyze up to 50 databases in parallel to identify which systems pose the highest risk. Color-coded severity table shows CRITICAL, HIGH, MEDIUM, and LOW priority issues at a glance.
+
+![Batch Analysis](src/screenshots/batch-response.png)
+
 ## Architecture
 
 ![Architecture Diagram](docs/architecture-diagram.drawio.png)
